@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.instwall.balloonviewdemo.view.pathlayout.ClipPathFrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/clip_path_frame_layout"
+    tools:context=".view.MainActivity"
+    android:background="@drawable/tree">
+
+   <ImageView
+       android:layout_width="wrap_content"
+       android:layout_height="wrap_content"
+      android:layout_gravity="center_horizontal"/>
+
+   <com.instwall.balloonviewdemo.view.custom.BalloonView
+       android:id="@+id/fly_view"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent"
+       app:snow_bitmap="@drawable/tag"
+       app:snow_count="10"
+       app:snow_initToLeft="15dp"
+       app:snow_initToRight="15dp"
+       app:snow_maxScale="0.90"
+       app:snow_minScale="0.60"
+       app:snow_xSpeed="20.0"
+       app:snow_ySpeed="30.0"
+       android:background="@android:color/transparent"/>
+
+
+</com.instwall.balloonviewdemo.view.pathlayout.ClipPathFrameLayout>
