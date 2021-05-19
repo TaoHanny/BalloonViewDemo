@@ -24,27 +24,20 @@ import com.instwall.balloonviewdemo.model.ParamsData;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.sql.Date;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
 public class BalloonView extends View {
     public static final long DEFAULTDURATION = 300L;
-    /**
-     * the distance of snow start falling to the view top
-     */
+
     private int initToTop;
-    /**
-     * the distance of snow start falling to the view left
-     */
+
     private int initToLeft;
-    /**
-     * the distance of snow start falling to the view bottom
-     */
+
     private int initToBottom;
-    /**
-     * the distance of snow start falling to the view right
-     */
+
     private int initToRight;
     private float minScale;
     private float maxScale;
@@ -60,18 +53,14 @@ public class BalloonView extends View {
     private Random yRandom = new Random();
     private boolean isDelyStop;
     private boolean sendMsgable;
-    /**
-     * the range of snow start falling in the x direction
-     */
+
     private float xWidth;
-    /**
-     * the range of snow start falling in the y direction
-     */
+
     private float yHeight;
 
     private Context context;
 
-    private final String TAG = "FlyView";
+    private final String TAG = "BalloonView";
     public BalloonView(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
@@ -139,29 +128,51 @@ public class BalloonView extends View {
             paint.setColor(Color.WHITE);
             paint.setStyle(Paint.Style.FILL);
 
-            paint.setColor(Color.RED);
-            paint.setTextSize(20);
-            canvas.drawText(snow.content, snow.x+snow.bpWidth, snow.y+snow.bpHeight, paint);
+            int width = snow.snowBitmap.getWidth();
+            int height = snow.snowBitmap.getHeight();
+            paint.setColor(Color.BLACK);
+            paint.setTextSize(18);
+            float [] posName = new float[snow.name.length() * 2];
+            for (int j = 0;j < posName.length ;j+=2){
+                posName[j] = snow.x + (width/4) * 3 + (width / 4)/4;
+                if (j==0){
+                    posName[j+1] = snow.y + height / 4;
+                }else {
+                    posName[j+1] = posName[j-1] + 20;
+                }
+            }
+            canvas.drawPosText(snow.name, posName, paint);
+            canvas.save();
+
+            paint.setColor(Color.BLUE);
+            paint.setTextSize(18);
+            if(snow.content!=null && snow.content.length()>35){
+                snow.content = snow.content.substring(0,34);
+            }
+            float [] posContent = new float[snow.content.length() * 2];
+            for (int j = 0;j < posContent.length ;j+=2){
+                float currentWidth = 0;
+                if (j==0){
+                    posContent[j] = snow.x + (width/4) * 2 + (width / 4)/4;
+                    posContent[j+1] = snow.y + height / 6;
+                }else {
+                    currentWidth = posContent[j-1] + 20;
+                    float maxHeight = snow.y + (height / 6) * 6;
+                    if(currentWidth >= maxHeight){
+                        posContent[j] = posContent[j-2] - width / 6;
+                        posContent[j+1] = snow.y + height / 6;
+                    }else {
+                        posContent[j] = posContent[j-2] ;
+                        posContent[j+1] = posContent[j-1] + 20;
+                    }
+                }
+            }
+            canvas.drawPosText(snow.content, posContent, paint);
         }
     }
 
     private int[] imageArr = {R.drawable.snowflake,R.drawable.heart1,R.drawable.heart2,R.drawable.heart5};
 
-    /**
-     * init snowList
-     */
-    private void initSnows() {
-        if (null == snowBitmap) return;
-//        snowList.clear();
-//        for (int i = 0; i < 1; i++) {
-//            Random mRandom = new Random();
-//            int index = mRandom.nextInt(imageArr.length);
-//            BitmapDrawable bitmapDrawable = (BitmapDrawable) getResources().getDrawable(imageArr[index]);
-//            Bitmap bitmap = bitmapDrawable.getBitmap();
-//            Snow snow = new Snow(xSpeed, ySpeed, bitmap);
-//            snowList.add(snow);
-//        }
-    }
 
 
     /**
@@ -172,9 +183,7 @@ public class BalloonView extends View {
         this.isDelyStop = true;
     }
 
-    /**
-     * stop animation and clear snowList
-     */
+
     public void stopAnimationNow() {
         removeMessages();
         snowList.clear();
@@ -193,7 +202,6 @@ public class BalloonView extends View {
             removeMessages();
             handler.sendEmptyMessageDelayed(MSG_STOP, snowDuration);
         }
-        initSnows();
         animator.start();
     }
 
@@ -213,13 +221,8 @@ public class BalloonView extends View {
     }
 
     public void pushSnows(List<ParamsData> list){
-//        Random mRandom = new Random();
-//        int index = mRandom.nextInt(imageArr.length);
-//        BitmapDrawable bitmapDrawable = (BitmapDrawable) getResources().getDrawable(imageArr[index]);
-//        Bitmap bitmap = bitmapDrawable.getBitmap();
-//        Snow snow1 = new Snow(xSpeed, ySpeed, bitmap);
         Message message= new Message();
-        message.what = MSG_ADD;
+        message.what = MSG_ADD_FULL;
         message.obj = list;
         handler.sendMessage(message);
     }
@@ -233,17 +236,17 @@ public class BalloonView extends View {
     }
 
     private final int MSG_STOP = 0x01;
-    private final int MSG_ADD = 0x02;
+    private final int MSG_ADD_FULL = 0x02;
     private final int MSG_UPDATE = 0x03;
+    private final int MSG_ADD = 0x04;
     @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
             switch (msg.what){
-                case MSG_ADD:
-                    List<ParamsData> dataList = (List<ParamsData>) msg.obj ;
-
+                case MSG_ADD_FULL:
+                    List<ParamsData> dataList = (List<ParamsData>) msg.obj;
                     for (ParamsData data : dataList){
                         boolean isExist = false;
                         for (Snow snow : snowList){
@@ -255,11 +258,19 @@ public class BalloonView extends View {
                         if (!isExist){
                             Snow snow2 = getSnow();
                             snow2.sid = data.getSid();
-                            snow2.name = data.getWords();
+                            snow2.content = data.getShowWords();
+                            snow2.name = data.getShowWords();
                             snow2.tplType = data.getTpltype();
-                            snowList.add(snow2);
+                            Message message = new Message();
+                            message.what = MSG_ADD;
+                            message.obj = snow2;
+                            handler.sendMessageDelayed(message,500);
                         }
                     }
+                    break;
+                case MSG_ADD:
+                    Snow snow = (Snow) msg.obj;
+                    snowList.add(snow);
                     break;
                 case MSG_STOP:
                     isDelyStop = true;
@@ -294,12 +305,14 @@ public class BalloonView extends View {
         }
     }
 
+    int count  = 0;
     private void updateSnowView(){
-        Log.d(TAG, "updateSnowView: ");
+        count++;
         for (int i = 0; i < snowList.size(); i++) {
             Snow snow = snowList.get(i);
             snow.x += snow.xSpeed;
-            if(snow.y > 0 && snow.y < 50){
+            if(snow.y > 0 && snow.y < snow.endY){
+//                snow.x += snow.xSpeed;
                 if(snow.timeCurrent == 0){
                     snow.timeCurrent = System.currentTimeMillis();
                     snow.timeEnd = snow.timeCurrent + 5000;
@@ -313,14 +326,10 @@ public class BalloonView extends View {
             if(!snow.delayBool){
                 snow.y -= snow.ySpeed;
             }
-            Random mRandom = new Random();
-            int index = mRandom.nextInt(imageArr.length);
-            snow.snowBitmap = BitmapFactory.decodeResource(getContext().getResources(), R.drawable.tag);
-            Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
-            if (snow.x < -snow.bpWidth || snow.x > getWidth()) {
-                /**
-                 *  the snow falling to the sides
-                 */
+            snow.snowBitmap = BitmapFactory.decodeResource(getContext().getResources(), R.drawable.snow);
+//            Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
+            if (snow.x < -snow.bpWidth || snow.x > getWidth()){
+
                 if (isDelyStop)
                     snowList.remove(i);
                 else {
@@ -329,23 +338,14 @@ public class BalloonView extends View {
                 }
             }
             else if (snow.y < 0) {
-                /**
-                 * the snow falling to the Top
-                 */
                 if (isDelyStop)
                     snowList.remove(i);
                 else {
-//                        snow.x = randomX(snow.bpWidth);
-//                        snow.y = yHeight - snow.bpHeight;
-//                        snow.delayBool = false;
-//                        snow.timeCurrent = 0;
-//                        snow.timeEnd = 0;
-                    if(snow.tplType!="00"){
+                    if(snow.tplType!="00" && snow.sid !=null){
+                        Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
                         SaveTaskManager.getInstance().saveSnowTask(snow);
                     }
                     snowList.remove(i);
-
-
                 }
             }
         }
@@ -356,6 +356,8 @@ public class BalloonView extends View {
             Snow snow = getSnow();
             snow.tplType = "00";
             snowList.add(getSnow());
+            Log.d(TAG, "updateSnowView: count = "+count);
+            count = 0;
         }
 
         invalidate();
@@ -371,6 +373,8 @@ public class BalloonView extends View {
         private String content;
         private float x;
         private float y;
+        private float endX;
+        private float endY;
         private float xSpeed;
         private float ySpeed;
         private int bpHeight;
@@ -386,7 +390,7 @@ public class BalloonView extends View {
             float tempScale = minScale + (float) (Math.random() * (maxScale - minScale));
             this.bpHeight = (int) (snowBitmap.getHeight() * tempScale);
             this.bpWidth = (int) (snowBitmap.getWidth() * tempScale);
-            this.x = randomX();
+            this.x = xWidth / 2;
             this.y = randomY(bpHeight);
             Log.d(TAG, "Snow() x = "+x + " , y = "+y);
             /**
@@ -394,11 +398,16 @@ public class BalloonView extends View {
              * xDirection < 0 left falling
              * xDirection = 0 vertical falling
              */
+            this.endX = randomEndX();
+            this.endY = randomEndY();
+
             float xDirection = 1.0f - (float) (Math.random() * 2.0f);
-            this.xSpeed = xSpeed * xDirection / BASESPEED;
+            this.xSpeed = getXSpeed(x, endX ,y, endY,ySpeed);
+//            this.xSpeed = xSpeed * xDirection / BASESPEED;
             this.ySpeed = (ySpeed + ySpeed * (float) Math.random()) / BASESPEED;
             this.snowBitmap = Bitmap.createScaledBitmap(snowBitmap, bpWidth, bpHeight, true);
-            this.content = "这是一个测试";
+            this.content = "这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试";
+            this.name = "乱七八糟的名字";
         }
 
         @Override
@@ -419,7 +428,7 @@ public class BalloonView extends View {
     /**
      * the x coordinate
      */
-    private int[] widthArr = {5,7,9};
+    private int[] widthArr = {5,6,7,8};
     private int widthIndex = 0;
     private float randomX() {
         float width = (xWidth / 12 )* widthArr[widthIndex];
@@ -427,6 +436,30 @@ public class BalloonView extends View {
         widthIndex++;
         if (widthIndex>=widthArr.length) widthIndex = 0;
         return width;
+    }
+
+
+    private float getXSpeed( float startX,float endX, float starty , float endy , float ySpeed){
+        float y = starty - endy;
+        float count = (y * 1000) / DEFAULTDURATION;
+
+        float x = endX - startX;
+        float speed = x / (count/8);
+        Log.e(TAG, "getXSpeed: speed = "+speed);
+        return speed;
+    }
+
+    private float randomEndX(){
+        int width = (int )xWidth/3;
+        float endX = xRandom.nextInt(width)+width;
+        Log.e(TAG, "randomEndX: endX = "+endX);
+        return endX;
+    }
+
+    private float randomEndY(){
+        int height = (int) yHeight / 3;
+        float endY = xRandom.nextInt(height) + height;
+        return endY;
     }
 
     /**

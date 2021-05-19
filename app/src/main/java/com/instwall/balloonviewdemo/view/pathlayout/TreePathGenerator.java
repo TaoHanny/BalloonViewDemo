@@ -1,14 +1,38 @@
 package com.instwall.balloonviewdemo.view.pathlayout;
 
 import android.graphics.Path;
+import android.util.Log;
 import android.view.View;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.instwall.balloonviewdemo.model.ParamsData;
 import com.instwall.balloonviewdemo.view.custom.BalloonView;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class TreePathGenerator implements PathGenerator{
+
+    private final List<Balloon> balloonList = new ArrayList<>();
+
+    public TreePathGenerator(String json){
+        List<Balloon> cacheList = getBalloonList(json);
+        if(cacheList!=null && cacheList.size()>=3){
+            balloonList.clear();
+            for (int i = 0; i < cacheList.size(); i++) {
+                Balloon balloon = cacheList.get(i);
+                balloon.x = (balloon.x * 3) / 2;
+                balloon.y = (balloon.y * 3) / 2;
+                balloonList.add(balloon);
+            }
+        }
+        Log.d("TreePathGenerator", "TreePathGenerator() list = "+balloonList.toString());
+    }
+
     @Override
     public Path generatePath(Path old, View view, int width, int height) {
         if (old == null) {
@@ -17,8 +41,15 @@ public class TreePathGenerator implements PathGenerator{
             old.reset();
         }
         int count = 0;
-        List<Balloon> list = getList();
-        for (Balloon balloon : list){
+        List<Balloon> list = balloonList;
+        Log.d("TreePathGenerator", "generatePath() list = "+balloonList.toString());
+        for (int i = 0; list.size()!=0 && i <= list.size(); i++) {
+            Balloon balloon;
+            if(i==list.size()){
+                balloon = list.get(0);
+            }else {
+                balloon = list.get(i);
+            }
             if(count == 0){
                 old.moveTo(balloon.x,balloon.y);
             }else {
@@ -28,6 +59,22 @@ public class TreePathGenerator implements PathGenerator{
         }
         old.close();
         return old;
+    }
+
+    public List<Balloon> getBalloonList(String json){
+        try {
+            JSONObject jsonObject = new JSONObject(json);
+            String jsonArr = jsonObject.getString("coordinate");
+            Gson gson = new Gson();
+            List<Balloon> dataList = gson.fromJson(jsonArr, new TypeToken<List<Balloon>>(){}.getType());
+            if(dataList!=null && dataList.size() >= 3 ){
+
+            }
+            return dataList;
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return null;
     }
 
     private List<Balloon> getList(){
@@ -58,6 +105,14 @@ public class TreePathGenerator implements PathGenerator{
         public Balloon(int x , int y){
             this.x = x;
             this.y = y;
+        }
+
+        @Override
+        public String toString() {
+            return "Balloon{" +
+                    "x=" + x +
+                    ", y=" + y +
+                    '}';
         }
     }
 }

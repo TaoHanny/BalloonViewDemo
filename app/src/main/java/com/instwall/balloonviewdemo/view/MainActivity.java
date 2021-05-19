@@ -1,23 +1,28 @@
 package com.instwall.balloonviewdemo.view;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
+import android.util.Log;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.instwall.balloonviewdemo.R;
 import com.instwall.balloonviewdemo.control.SaveTaskManager;
+import com.instwall.balloonviewdemo.control.SaveTaskManager.OnSaveListener;
+import com.instwall.balloonviewdemo.core.WebService;
 import com.instwall.balloonviewdemo.model.ParamsData;
-import com.instwall.balloonviewdemo.view.balloon.KsgLikeView;
 import com.instwall.balloonviewdemo.view.custom.BalloonView;
-import com.instwall.balloonviewdemo.view.custom.FlyView;
-
 
 import com.instwall.balloonviewdemo.view.pathlayout.PathInfo;
 import com.instwall.balloonviewdemo.view.pathlayout.TreePathGenerator;
+import com.instwall.im.ImClient;
+import com.instwall.im.ImListener;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -25,33 +30,33 @@ import org.json.JSONObject;
 
 import java.util.List;
 
+import ashy.earl.common.util.NetworkChangeHelper;
+
 public class MainActivity extends AppCompatActivity {
 
-
+    private final String TAG = "MainActivity";
     private int mApplyFlag = PathInfo.APPLY_FLAG_DRAW_AND_TOUCH;
 
     private int mClipType = PathInfo.CLIP_TYPE_IN;
     private BalloonView flyView;
-    private KsgLikeView mLikeView;
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private SaveTaskManager manager;
+    private NetworkChangeHelper mNetwork = NetworkChangeHelper.get();
+
+    private final ImClient mImClient = ImClient.get();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-//        mLikeView = findViewById(R.id.fly_view);
         flyView = findViewById(R.id.fly_view);
-
-        new PathInfo.Builder(new TreePathGenerator(), flyView)
-                .setApplyFlag(mApplyFlag)
-                .setClipType(mClipType)
-                .create()
-                .apply();
 
         manager = SaveTaskManager.getInstance();
         manager.addListener(onSaveListener);
-        manager.getHttpTask();
+
+        mImClient.addListener(mImListener);
+
+        mNetwork.addNetworkListener(mNetworkListener);
         flyView.setSnowDuration(200);
         mHandler.postDelayed(mLikeRunnable, 1000);
     }
@@ -60,21 +65,98 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void run() {
             flyView.startAnimation();
-            initData();
         }
     };
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        WebService.start(this);
+        manager.reportDataTask();
+        WebService.setListener(new WebService.OnLocalListener() {
+            @Override
+            public void onPostData(String json) {
+                sendLayoutPath(json);
+                manager.saveConfigJsonTask(json);
+            }
+        });
+    }
 
     @Override
     protected void onStop() {
         super.onStop();
         manager.remoteListener(onSaveListener);
+        WebService.stop(this);
+        mImClient.removeListener(mImListener);
     }
 
-    private void initData(){
+
+    private final ImListener mImListener = new ImListener() {
+
+        @Override
+        public void onStateChanged(int state) { }
+
+        @Override
+        public void onNewMsg(@NonNull String from, @NonNull String msg) {
+            JSONObject json = ImClient.optServerCmdJson(msg);
+            if (json == null || !"pt_showdatas_forbless".equals(json.optString("cmd"))) {
+                return;
+            }
+            manager.getHttpTask();
+        }
+    };
+
+    private final int MSG_PATH = 0x11;
+    @SuppressLint("HandlerLeak")
+    final Handler handler = new Handler(){
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            super.handleMessage(msg);
+            if(msg.what == MSG_PATH){
+                String json = (String) msg.obj;
+                new PathInfo.Builder(new TreePathGenerator(json), flyView)
+                        .setApplyFlag(mApplyFlag)
+                        .setClipType(mClipType)
+                        .create()
+                        .apply();
+            }
+        }
+    };
+
+    private static boolean IS_REBOOT_OR_NETWOEK = true;
+    private OnSaveListener onSaveListener = new OnSaveListener() {
+        @Override
+        public void onGetHttpData(int type,String json) {
+            if(type == OnSaveListener.TYPE_SNOW)
+                updateData(json);
+            else if(type == OnSaveListener.TYPE_CONFIG_JSON){
+                sendLayoutPath(json);
+//                updateData("");
+            }
+        }
+
+        @Override
+        public void onReportStatus(int status) {
+            if(OnSaveListener.REPORT_DONE == status){
+                if(IS_REBOOT_OR_NETWOEK){
+                    manager.getHttpTask();
+                    manager.getConfigJsonTask();
+                    IS_REBOOT_OR_NETWOEK = false;
+                }
+            }
+        }
+    };
+
+    private void sendLayoutPath(String json) {
+        Message message = new Message();
+        message.what = MSG_PATH;
+        message.obj = json;
+        handler.sendMessage(message);
+    }
+
+    private void updateData(String json){
         try {
-            JSONObject jsonObject = new JSONObject(JSON);
-            JSONArray jsonArray = jsonObject.optJSONArray("data_list");
+            JSONArray jsonArray = new JSONArray(JSON);
             if(jsonArray == null || jsonArray.length() == 0) return;
             Gson gson = new Gson();
             List<ParamsData> dataList = gson.fromJson(jsonArray.toString(), new TypeToken<List<ParamsData>>(){}.getType());
@@ -83,56 +165,20 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-
-
-    private SaveTaskManager.OnSaveListener onSaveListener = new SaveTaskManager.OnSaveListener() {
+    private NetworkChangeHelper.NetworkListener mNetworkListener = new NetworkChangeHelper.NetworkListener() {
         @Override
-        public void onGetHttpData(String json) {
-
+        public void onNetworkChanged(boolean hasActiveNetwork, String type, String name) {
+            if(hasActiveNetwork){
+                Log.d(TAG, "onNetworkChanged: has active network");
+                manager.reportDataTask();
+            }else {
+                Log.d(TAG, "onNetworkChanged: hasnot active network");
+                IS_REBOOT_OR_NETWOEK = true;
+            }
         }
     };
-    private String JSON = "{\n" +
-            "    \"datafrom\":\"scenicSpots\",\n" +
-            "    \"data_list\":[\n" +
-            "        {\n" +
-            "            \"sid\":\"002\",\n" +
-            "            \"words\":\"祝大家节日快乐\",\n" +
-            "            \"synctime\":1618566725,\n" +
-            "            \"playtime\":15,\n" +
-            "            \"acttype\":\"showWords\",\n" +
-            "            \"tpltype\":\"A\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "            \"sid\":\"003\",\n" +
-            "            \"words\":\"祝大家节日快乐\",\n" +
-            "            \"synctime\":1618566735,\n" +
-            "            \"playtime\":15,\n" +
-            "            \"acttype\":\"showWords\",\n" +
-            "            \"tpltype\":\"C\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "            \"sid\":\"004\",\n" +
-            "            \"words\":\"祝大家节日快乐\",\n" +
-            "            \"synctime\":1618566745,\n" +
-            "            \"playtime\":15,\n" +
-            "            \"acttype\":\"showWords\",\n" +
-            "            \"tpltype\":\"B\"\n" +
-            "        },\n" +
-            "        {\n" +
-            "            \"sid\":\"005\",\n" +
-            "            \"words\":\"祝大家节日快乐\",\n" +
-            "            \"synctime\":1618566755,\n" +
-            "            \"playtime\":15,\n" +
-            "            \"acttype\":\"showWords\",\n" +
-            "            \"tpltype\":\"D\"\n" +
-            "        }\n" +
-            "    ]\n" +
-            "}";
 
 
 
-
-
-
-
+    private String JSON = "[{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test003\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test004\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test005\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test006\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test007\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test008\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test009\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test0010\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"},{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test011\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":\"1618566735\"}]";
 }

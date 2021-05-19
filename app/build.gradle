@@ -39,4 +39,5 @@ dependencies {
     api 'com.instwall.server:new_netcore:1.57'
     api 'com.instwall.server:new_im:1.17'
     implementation 'com.google.code.gson:gson:2.8.6'
+    implementation 'com.koushikdutta.async:androidasync:2.2.1'
 }

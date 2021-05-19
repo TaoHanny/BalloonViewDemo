@@ -1,89 +1,62 @@
 package com.instwall.balloonviewdemo.model;
 
 public class ParamsData {
-    private String sid ;
-    private String words;
-    private long synctime;
-    private String acttype;
+    private String status;
+    private String showWords;
+    private String sid;
+    private int playtime;
     private String tpltype;
+    private String synctime;
+    public void setStatus(String status) {
+        this.status = status;
+    }
+    public String getStatus() {
+        return status;
+    }
 
-    public String getSid() {
-        return sid;
+    public void setShowWords(String showWords) {
+        this.showWords = showWords;
+    }
+    public String getShowWords() {
+        return showWords;
     }
 
     public void setSid(String sid) {
         this.sid = sid;
     }
-
-    public String getWords() {
-        return words;
+    public String getSid() {
+        return sid;
     }
 
-    public void setWords(String words) {
-        this.words = words;
+    public void setPlaytime(int playtime) {
+        this.playtime = playtime;
     }
-
-    public long getSynctime() {
-        return synctime;
-    }
-
-    public void setSynctime(long synctime) {
-        this.synctime = synctime;
-    }
-
-    public String getActtype() {
-        return acttype;
-    }
-
-    public void setActtype(String acttype) {
-        this.acttype = acttype;
-    }
-
-    public String getTpltype() {
-        return tpltype;
+    public int getPlaytime() {
+        return playtime;
     }
 
     public void setTpltype(String tpltype) {
         this.tpltype = tpltype;
     }
+    public String getTpltype() {
+        return tpltype;
+    }
+
+    public void setSynctime(String synctime) {
+        this.synctime = synctime;
+    }
+    public String getSynctime() {
+        return synctime;
+    }
 }
 
 /**
  {
- "datafrom":"scenicSpots",
- "data_list":[
- {
- "sid":"002",
- "words":"祝大家节日快乐",
- "synctime":1618566725,
+ "status":"waiting",
+ "showWords":"祝大家节日快乐",
+ "sid":"test003",
  "playtime":15,
- "acttype":"showWords",
- "tpltype":"A"
- },
- {
- "sid":"003",
- "words":"祝大家节日快乐",
- "synctime":1618566735,
- "playtime":15,
- "acttype":"showWords",
- "tpltype":"C"
- },
- {
- "sid":"004",
- "words":"祝大家节日快乐",
- "synctime":1618566745,
- "playtime":15,
- "acttype":"showWords",
- "tpltype":"B"
- },
- {
- "sid":"005",
- "words":"祝大家节日快乐",
- "synctime":1618566755,
- "playtime":15,
- "acttype":"showWords",
- "tpltype":"D"
- }
- ]
+ "tpltype":"C",
+ "synctime":"1618566735"
  }
  */

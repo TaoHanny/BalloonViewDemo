@@ -1,8 +1,11 @@
 package com.instwall.balloonviewdemo.control.utils;
 
+import android.util.Log;
+
 import com.instwall.net.ApiBase;
 import com.instwall.net.ErrorHandler;
 import com.instwall.net.NetCore;
+import com.instwall.net.NetCoreException;
 import com.instwall.net.ResultParser;
 
 import org.jetbrains.annotations.NotNull;
@@ -10,10 +13,18 @@ import org.jetbrains.annotations.Nullable;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import okhttp3.Call;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+
 public class GetHttpApi extends ApiBase<String> {
 
 
-
+    private final String TAG = "GetHttpApi";
     public GetHttpApi(){
         super("get_showdatas_list");
     }
@@ -21,16 +32,27 @@ public class GetHttpApi extends ApiBase<String> {
     @Nullable
     @Override
     protected String requestApi(@NotNull NetCore netCore) throws Throwable {
+        OkHttpClient okHttpClient = netCore.get().okHttp(NetCore.TIMEOUT);
+        Call call = okHttpClient.newCall(getRequest());
+        Response response =  call.execute();
+        ResponseBody body = response.body();
+        String msg = body == null ? "" : body.string();
+        // Check response
+        if (response.code() != 200) {
+            throw new NetCoreException(NetCoreException.TYPE_SERVER, response.code(), msg, null, msg);
+        }
+//        Log.d(TAG, "requestApi() -> msg = " + msg);
+        return msg;
+    }
+
+
+    private final String URL = "http://smp.instwall.com/openapi/json";
+    private Request getRequest(){
         JSONObject json  = getBody();
-        String result = netCore.requestApi("GC", "/openapi/json",
-                "get_showdatas_list", json.toString(),
-                new ResultParser<String>() {
-                    @Override
-                    public String parse(String string) throws Throwable {
-                        return string;
-                    }
-                }, ErrorHandler.DEFALT_NODE_ERROR);
-        return result;
+        MediaType JSON = MediaType.parse("application/json; charset=utf-8");
+        RequestBody body = RequestBody.create(JSON,json.toString());
+        Request request = new Request.Builder().url(URL).post(body).build();
+        return request;
     }
 
     private JSONObject getBody(){
