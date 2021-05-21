@@ -10,6 +10,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.PointF;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Handler;
 import android.os.Message;
@@ -121,7 +122,7 @@ public class BalloonView extends View {
         for (int i = 0; i < snowList.size(); i++) {
             Snow snow = snowList.get(i);
             mtx.setTranslate(-snow.bpWidth / 2, -snow.bpHeight / 2);
-            mtx.postTranslate(snow.bpWidth / 2 + snow.x, snow.bpHeight / 2 + snow.y);
+            mtx.postTranslate(snow.bpWidth / 2 + snow.pathPoint.x, snow.bpHeight / 2 + snow.pathPoint.y);
             canvas.drawBitmap(snow.snowBitmap, mtx, null);
             canvas.save();
             Paint paint = new Paint();
@@ -130,13 +131,13 @@ public class BalloonView extends View {
 
             int width = snow.snowBitmap.getWidth();
             int height = snow.snowBitmap.getHeight();
-            paint.setColor(Color.BLACK);
+            paint.setColor(Color.WHITE);
             paint.setTextSize(18);
             float [] posName = new float[snow.name.length() * 2];
             for (int j = 0;j < posName.length ;j+=2){
-                posName[j] = snow.x + (width/4) * 3 + (width / 4)/4;
+                posName[j] = snow.pathPoint.x + (width/4) * 3 + (width / 4)/4;
                 if (j==0){
-                    posName[j+1] = snow.y + height / 4;
+                    posName[j+1] = snow.pathPoint.y + height / 4;
                 }else {
                     posName[j+1] = posName[j-1] + 20;
                 }
@@ -146,21 +147,21 @@ public class BalloonView extends View {
 
             paint.setColor(Color.BLUE);
             paint.setTextSize(18);
-            if(snow.content!=null && snow.content.length()>35){
-                snow.content = snow.content.substring(0,34);
+            if(snow.content!=null && snow.content.length()>25){
+                snow.content = snow.content.substring(0,24);
             }
             float [] posContent = new float[snow.content.length() * 2];
             for (int j = 0;j < posContent.length ;j+=2){
                 float currentWidth = 0;
                 if (j==0){
-                    posContent[j] = snow.x + (width/4) * 2 + (width / 4)/4;
-                    posContent[j+1] = snow.y + height / 6;
+                    posContent[j] = snow.pathPoint.x + (width/4) * 2 + (width / 4)/4;
+                    posContent[j+1] = snow.pathPoint.y + height / 6;
                 }else {
                     currentWidth = posContent[j-1] + 20;
-                    float maxHeight = snow.y + (height / 6) * 6;
+                    float maxHeight = snow.pathPoint.y + (height / 6) * 6;
                     if(currentWidth >= maxHeight){
                         posContent[j] = posContent[j-2] - width / 6;
-                        posContent[j+1] = snow.y + height / 6;
+                        posContent[j+1] = snow.pathPoint.y + height / 6;
                     }else {
                         posContent[j] = posContent[j-2] ;
                         posContent[j+1] = posContent[j-1] + 20;
@@ -174,26 +175,6 @@ public class BalloonView extends View {
     private int[] imageArr = {R.drawable.snowflake,R.drawable.heart1,R.drawable.heart2,R.drawable.heart5};
 
 
-
-    /**
-     * stop animation dely
-     */
-    public void stopAnimationDely() {
-        removeMessages();
-        this.isDelyStop = true;
-    }
-
-
-    public void stopAnimationNow() {
-        removeMessages();
-        snowList.clear();
-        invalidate();
-        animator.cancel();
-    }
-
-    /**
-     * start animation
-     */
     public void startAnimation() {
         this.isDelyStop = false;
         if (animator.isRunning())
@@ -205,9 +186,6 @@ public class BalloonView extends View {
         animator.start();
     }
 
-    /**
-     * set the duration of animation
-     */
     public void setSnowDuration(long snowDuration) {
         this.snowDuration = snowDuration;
         sendMsgable = snowDuration > DEFAULTDURATION;
@@ -286,7 +264,7 @@ public class BalloonView extends View {
     private Snow getSnow() {
         Random mRandom = new Random();
         int index = mRandom.nextInt(imageArr.length);
-        BitmapDrawable bitmapDrawable = (BitmapDrawable) getResources().getDrawable(imageArr[index]);
+        BitmapDrawable bitmapDrawable = (BitmapDrawable) getResources().getDrawable(R.drawable.snow);
         Bitmap bitmap = bitmapDrawable.getBitmap();
         return new Snow(xSpeed, ySpeed, bitmap);
     }
@@ -305,17 +283,13 @@ public class BalloonView extends View {
         }
     }
 
-    int count  = 0;
     private void updateSnowView(){
-        count++;
-        for (int i = 0; i < snowList.size(); i++) {
+        for (int i = 0; i< snowList.size();i++){
             Snow snow = snowList.get(i);
-            snow.x += snow.xSpeed;
-            if(snow.y > 0 && snow.y < snow.endY){
-//                snow.x += snow.xSpeed;
+            if(snow.pathPoint.y > 0 && snow.pathPoint.y < snow.endPoint.y){
                 if(snow.timeCurrent == 0){
                     snow.timeCurrent = System.currentTimeMillis();
-                    snow.timeEnd = snow.timeCurrent + 5000;
+                    snow.timeEnd = snow.timeCurrent + 15000;
                 }
                 if(snow.timeCurrent < snow.timeEnd){
                     snow.delayBool = true;
@@ -324,58 +298,107 @@ public class BalloonView extends View {
                 else snow.delayBool = false;
             }
             if(!snow.delayBool){
-                snow.y -= snow.ySpeed;
+                snow.count+=0.001;
+                snow.pathPoint =  calculateBezierPointForQuadratic(snow.count,snow.startPoint,snow.controlPoint,snow.endPoint);
             }
-            snow.snowBitmap = BitmapFactory.decodeResource(getContext().getResources(), R.drawable.snow);
-//            Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
-            if (snow.x < -snow.bpWidth || snow.x > getWidth()){
-
-                if (isDelyStop)
-                    snowList.remove(i);
-                else {
-                    snow.x = randomX();
-                    snow.y = randomY(snow.bpHeight);
+            if (snow.pathPoint.y < 0) {
+                if(snow.tplType!="00" && snow.sid !=null){
+                    Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
+                    SaveTaskManager.getInstance().saveSnowTask(snow);
                 }
-            }
-            else if (snow.y < 0) {
-                if (isDelyStop)
-                    snowList.remove(i);
-                else {
-                    if(snow.tplType!="00" && snow.sid !=null){
-                        Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
-                        SaveTaskManager.getInstance().saveSnowTask(snow);
-                    }
-                    snowList.remove(i);
-                }
+                snowList.remove(i);
             }
         }
-        /**
-         * to prevent the animator running empty
-         */
         if (snowList.size() <= 0 && animator.isRunning()){
             Snow snow = getSnow();
             snow.tplType = "00";
-            snowList.add(getSnow());
-            Log.d(TAG, "updateSnowView: count = "+count);
-            count = 0;
+            snow.content = "祝我的家人幸福安康，永远幸福！";
+            snow.name = "用户的名字";
+            snowList.add(snow);
         }
 
         invalidate();
     }
 
+//    private void updateSnowView(){
+//        for (int i = 0; i < snowList.size(); i++) {
+//            Snow snow = snowList.get(i);
+//
+//            if(snow.y > 0 && snow.y < snow.endY){
+//                snow.x += (snow.xSpeed/2);
+//                if(snow.timeCurrent == 0){
+//                    snow.timeCurrent = System.currentTimeMillis();
+//                    snow.timeEnd = snow.timeCurrent + 15000;
+//                }
+//                if(snow.timeCurrent < snow.timeEnd){
+//                    snow.delayBool = true;
+//                    snow.timeCurrent = System.currentTimeMillis();
+//                }
+//                else snow.delayBool = false;
+//            }
+//            if(!snow.delayBool){
+//                snow.y -= snow.ySpeed;
+//                snow.x += snow.xSpeed;
+//            }
+//            snow.snowBitmap = BitmapFactory.decodeResource(getContext().getResources(), R.drawable.snow);
+////            Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
+//            if (snow.x < -snow.bpWidth || snow.x > getWidth()){
+//
+//                if (isDelyStop)
+//                    snowList.remove(i);
+//                else {
+//                    snow.x = randomX();
+//                    snow.y = randomY(snow.bpHeight);
+//                }
+//            }
+//            else if (snow.y < 0) {
+//                if (isDelyStop)
+//                    snowList.remove(i);
+//                else {
+//                    if(snow.tplType!="00" && snow.sid !=null){
+//                        Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
+//                        SaveTaskManager.getInstance().saveSnowTask(snow);
+//                    }
+//                    snowList.remove(i);
+//                }
+//            }
+//        }
+//        /**
+//         * to prevent the animator running empty
+//         */
+//        if (snowList.size() <= 0 && animator.isRunning()){
+//            Snow snow = getSnow();
+//            snow.tplType = "00";
+//            snow.content = "祝我的家人幸福安康，永远幸福！";
+//            snow.name = "用户的名字";
+//            snowList.add(snow);
+//        }
+//
+//        invalidate();
+//    }
 
 
 
+    public static PointF calculateBezierPointForQuadratic(float t, PointF p0, PointF p1, PointF p2) {
+        PointF point = new PointF();
+        float temp = 1 - t;
+        point.x = temp * temp * p0.x + 2 * t * temp * p1.x + t * t * p2.x;
+        point.y = temp * temp * p0.y + 2 * t * temp * p1.y + t * t * p2.y;
+        return point;
+    }
 
     public class Snow {
+
+
+
         public String sid;
+        float count = 0;
         private String name;
         private String content;
-        private float x;
-        private float y;
-        private float endX;
-        private float endY;
-        private float xSpeed;
+        private PointF startPoint = new PointF();
+        private PointF pathPoint = new PointF();
+        private PointF endPoint = new PointF();
+        private PointF controlPoint = new PointF();
         private float ySpeed;
         private int bpHeight;
         private int bpWidth;
@@ -390,61 +413,46 @@ public class BalloonView extends View {
             float tempScale = minScale + (float) (Math.random() * (maxScale - minScale));
             this.bpHeight = (int) (snowBitmap.getHeight() * tempScale);
             this.bpWidth = (int) (snowBitmap.getWidth() * tempScale);
-            this.x = xWidth / 2;
-            this.y = randomY(bpHeight);
-            Log.d(TAG, "Snow() x = "+x + " , y = "+y);
-            /**
-             * xDirection > 0 right falling
-             * xDirection < 0 left falling
-             * xDirection = 0 vertical falling
-             */
-            this.endX = randomEndX();
-            this.endY = randomEndY();
+            this.startPoint.x = xWidth / 2;
+            this.startPoint.y = randomY(bpHeight);
+            this.pathPoint = this.startPoint;
+            this.endPoint.x = randomEndX();
+            this.endPoint.y = randomEndY();
 
+            this.controlPoint = getControlPointF(startPoint,endPoint);
             float xDirection = 1.0f - (float) (Math.random() * 2.0f);
-            this.xSpeed = getXSpeed(x, endX ,y, endY,ySpeed);
+//            this.xSpeed = getXSpeed(x, endX ,y, endY,ySpeed);
+//            this,xSpeed = 3L;
 //            this.xSpeed = xSpeed * xDirection / BASESPEED;
             this.ySpeed = (ySpeed + ySpeed * (float) Math.random()) / BASESPEED;
             this.snowBitmap = Bitmap.createScaledBitmap(snowBitmap, bpWidth, bpHeight, true);
-            this.content = "这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试这是一个测试";
-            this.name = "乱七八糟的名字";
         }
 
-        @Override
-        public String toString() {
-            return "Snow{" +
-                    "x=" + x +
-                    ", y=" + y +
-                    ", xSpeed=" + xSpeed +
-                    ", ySpeed=" + ySpeed +
-                    ", bpHeight=" + bpHeight +
-                    ", bpWidth=" + bpWidth +
-                    ", snowBitmap=" + snowBitmap +
-                    ", BASESPEED=" + BASESPEED +
-                    '}';
-        }
     }
 
-    /**
-     * the x coordinate
-     */
-    private int[] widthArr = {5,6,7,8};
-    private int widthIndex = 0;
-    private float randomX() {
-        float width = (xWidth / 12 )* widthArr[widthIndex];
-        Log.d(TAG, "randomX: width = "+width);
-        widthIndex++;
-        if (widthIndex>=widthArr.length) widthIndex = 0;
-        return width;
+
+    private PointF getControlPointF(PointF startPoint , PointF endPoint){
+        PointF controlPoint = new PointF();
+        if(startPoint.x > endPoint.x){
+            controlPoint.x = startPoint.x - endPoint.y;
+        }else{
+            controlPoint.x = endPoint.x - startPoint.y;
+        }
+        if (startPoint.y > endPoint.y){
+            controlPoint.y = startPoint.y - endPoint.y;
+        }else {
+            controlPoint.y =endPoint.y - startPoint.y;
+        }
+        return controlPoint;
     }
+
 
 
     private float getXSpeed( float startX,float endX, float starty , float endy , float ySpeed){
         float y = starty - endy;
         float count = (y * 1000) / DEFAULTDURATION;
-
         float x = endX - startX;
-        float speed = x / (count/8);
+        float speed = x / (count/4);
         Log.e(TAG, "getXSpeed: speed = "+speed);
         return speed;
     }
@@ -460,6 +468,19 @@ public class BalloonView extends View {
         int height = (int) yHeight / 3;
         float endY = xRandom.nextInt(height) + height;
         return endY;
+    }
+
+    /**
+     * the x coordinate
+     */
+    private int[] widthArr = {5,6,7,8};
+    private int widthIndex = 0;
+    private float randomX() {
+        float width = (xWidth / 12 )* widthArr[widthIndex];
+        Log.d(TAG, "randomX: width = "+width);
+        widthIndex++;
+        if (widthIndex>=widthArr.length) widthIndex = 0;
+        return width;
     }
 
     /**

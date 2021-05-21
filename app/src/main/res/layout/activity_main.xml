@@ -9,11 +9,11 @@
     tools:context=".view.MainActivity"
     android:background="@android:color/white">
 
-   <ImageView
-       android:layout_width="wrap_content"
-       android:layout_height="wrap_content"
-      android:layout_gravity="center_horizontal"
-       android:src="@drawable/tree"/>
+   <VideoView
+       android:id="@+id/videoView"
+       android:layout_width="match_parent"
+       android:layout_height="match_parent"
+      android:layout_gravity="center_horizontal|bottom" />
 
    <com.instwall.balloonviewdemo.view.custom.BalloonView
        android:id="@+id/fly_view"
