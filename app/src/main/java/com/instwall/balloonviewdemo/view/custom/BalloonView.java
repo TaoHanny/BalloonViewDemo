@@ -3,63 +3,74 @@ package com.instwall.balloonviewdemo.view.custom;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.res.Resources;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PointF;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.drawable.BitmapDrawable;
+import android.net.Uri;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Message;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.View;
-import android.widget.TextView;
 
+import androidx.annotation.ColorInt;
+import androidx.annotation.ColorRes;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.SimpleTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.instwall.balloonviewdemo.R;
 import com.instwall.balloonviewdemo.control.SaveTaskManager;
 import com.instwall.balloonviewdemo.model.ParamsData;
 
 import org.jetbrains.annotations.NotNull;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
-import java.sql.Date;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
+import ashy.earl.common.app.App;
+import ashy.earl.common.util.L;
+
 public class BalloonView extends View {
+
     public static final long DEFAULTDURATION = 300L;
 
-    private int initToTop;
-
-    private int initToLeft;
-
-    private int initToBottom;
-
-    private int initToRight;
-    private float minScale;
-    private float maxScale;
-    private float xSpeed;
     private float ySpeed;
-    private int snowCount;
     private long snowDuration;
-    private List<Snow> snowList;
-    private BitmapDrawable snowBitmap;
+    private volatile List<Snow> snowList;
     private Matrix mtx = new Matrix();
     private ValueAnimator animator;
-    private Random xRandom = new Random();
     private Random yRandom = new Random();
     private boolean isDelyStop;
     private boolean sendMsgable;
 
+    private LinkedList<ParamsData> cacheDataLinked = new LinkedList<>();
     private float xWidth;
-
     private float yHeight;
+    private int delayTimeInt = 55000;
+    private List<Coordinate> coordinateList;
+    private List<ParamsData> showList = new ArrayList<>();
 
-    private Context context;
+    private Handler otherHandler;
+    private HandlerThread handlerThread = new HandlerThread("ballView");
 
     private final String TAG = "BalloonView";
     public BalloonView(Context context, AttributeSet attrs) {
@@ -68,114 +79,34 @@ public class BalloonView extends View {
 
     public BalloonView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        this.context = context;
         initAttr(context, attrs);
         init();
     }
 
+        @SuppressLint("CustomViewStyleable")
     private void initAttr(Context context, AttributeSet attrs) {
         TypedArray attributes = context.obtainStyledAttributes(attrs, R.styleable.FlyView);
-        int initTo = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initTo, 0);
-        initToTop = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToTop, 0);
-        initToLeft = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToLeft, 0);
-        initToBottom = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToBottom, 0);
-        initToRight = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToRight, 0);
-        minScale = attributes.getFloat(R.styleable.FlyView_snow_minScale, 1.0f);
-        maxScale = attributes.getFloat(R.styleable.FlyView_snow_maxScale, 1.0f);
-        xSpeed = attributes.getFloat(R.styleable.FlyView_snow_xSpeed, 0.0f);
         ySpeed = attributes.getFloat(R.styleable.FlyView_snow_ySpeed, 100.0f);
-        snowCount = attributes.getInt(R.styleable.FlyView_snow_count, 20);
         snowDuration = attributes.getInt(R.styleable.FlyView_snow_duration, 0);
-        snowBitmap = (BitmapDrawable) attributes.getDrawable(R.styleable.FlyView_snow_bitmap);
-
-        if (0 != initTo)
-            initToTop = initToLeft = initToBottom = initToRight = initTo;
-        if (minScale <= 0.0f || minScale > maxScale)
-            throw new IllegalArgumentException("The minScale is illegal");
         sendMsgable = snowDuration > DEFAULTDURATION;
         attributes.recycle();
     }
 
     private void init() {
-        /**
-         * close software/hardware
-         */
+        handlerThread.start();
+        otherHandler = new Handler(handlerThread.getLooper());
         setLayerType(View.LAYER_TYPE_NONE, null);
-        snowList = new ArrayList<>(snowCount);
+        snowList = new ArrayList<>();
+        showList = getShowParamsList();
         animator = ValueAnimator.ofFloat(1.0f, 0.0f);
         animator.setRepeatCount(ValueAnimator.INFINITE);
         animator.setDuration(DEFAULTDURATION);
         animator.addUpdateListener(new animatorUpdateListenerImp());
+        coordinateList = getCoordinate();
+        handler.sendEmptyMessageDelayed(MSG_ADD,5000);
     }
 
-    @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        Log.d(TAG, "onSizeChanged: getHeight = "+getHeight());
-        xWidth = getWidth() - initToLeft - initToRight;
-        yHeight = getHeight() - initToTop - initToBottom;
-    }
-
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        for (int i = 0; i < snowList.size(); i++) {
-            Snow snow = snowList.get(i);
-            mtx.setTranslate(-snow.bpWidth / 2, -snow.bpHeight / 2);
-            mtx.postTranslate(snow.bpWidth / 2 + snow.pathPoint.x, snow.bpHeight / 2 + snow.pathPoint.y);
-            canvas.drawBitmap(snow.snowBitmap, mtx, null);
-            canvas.save();
-            Paint paint = new Paint();
-            paint.setColor(Color.WHITE);
-            paint.setStyle(Paint.Style.FILL);
-
-            int width = snow.snowBitmap.getWidth();
-            int height = snow.snowBitmap.getHeight();
-            paint.setColor(Color.WHITE);
-            paint.setTextSize(18);
-            float [] posName = new float[snow.name.length() * 2];
-            for (int j = 0;j < posName.length ;j+=2){
-                posName[j] = snow.pathPoint.x + (width/4) * 3 + (width / 4)/4;
-                if (j==0){
-                    posName[j+1] = snow.pathPoint.y + height / 4;
-                }else {
-                    posName[j+1] = posName[j-1] + 20;
-                }
-            }
-            canvas.drawPosText(snow.name, posName, paint);
-            canvas.save();
-
-            paint.setColor(Color.BLUE);
-            paint.setTextSize(18);
-            if(snow.content!=null && snow.content.length()>25){
-                snow.content = snow.content.substring(0,24);
-            }
-            float [] posContent = new float[snow.content.length() * 2];
-            for (int j = 0;j < posContent.length ;j+=2){
-                float currentWidth = 0;
-                if (j==0){
-                    posContent[j] = snow.pathPoint.x + (width/4) * 2 + (width / 4)/4;
-                    posContent[j+1] = snow.pathPoint.y + height / 6;
-                }else {
-                    currentWidth = posContent[j-1] + 20;
-                    float maxHeight = snow.pathPoint.y + (height / 6) * 6;
-                    if(currentWidth >= maxHeight){
-                        posContent[j] = posContent[j-2] - width / 6;
-                        posContent[j+1] = snow.pathPoint.y + height / 6;
-                    }else {
-                        posContent[j] = posContent[j-2] ;
-                        posContent[j+1] = posContent[j-1] + 20;
-                    }
-                }
-            }
-            canvas.drawPosText(snow.content, posContent, paint);
-        }
-    }
-
-    private int[] imageArr = {R.drawable.snowflake,R.drawable.heart1,R.drawable.heart2,R.drawable.heart5};
-
-
-    public void startAnimation() {
+    public void startAnimation(){
         this.isDelyStop = false;
         if (animator.isRunning())
             animator.cancel();
@@ -186,16 +117,9 @@ public class BalloonView extends View {
         animator.start();
     }
 
-    public void setSnowDuration(long snowDuration) {
+    public void setSnowDuration(long snowDuration){
         this.snowDuration = snowDuration;
         sendMsgable = snowDuration > DEFAULTDURATION;
-    }
-
-    /**
-     * back the state of animation
-     */
-    public boolean isRunning() {
-        return animator.isRunning();
     }
 
     public void pushSnows(List<ParamsData> list){
@@ -213,10 +137,131 @@ public class BalloonView extends View {
         super.onDetachedFromWindow();
     }
 
+    @Override
+    protected void onSizeChanged(int w, int h, int oldW, int oldH) {
+        super.onSizeChanged(w, h, oldW, oldH);
+        xWidth = getWidth();
+        yHeight = getHeight();
+    }
+    @ColorInt
+    private int tagColor;
+    @ColorInt
+    private int tagLineColor;
+
+    private int nameTextSize;
+    private int contentTextSize;
+    private Paint paint = new Paint();
+    @SuppressLint("DrawAllocation")
+    @Override
+    protected void onDraw(Canvas canvas){
+        super.onDraw(canvas);
+        for (int i = 0; i < snowList.size(); i++) {
+
+            Snow snow = snowList.get(i);
+            float bpWidthHalf = snow.bpWidth / 2;
+            float bpHeightHalf = snow.bpHeight / 2;
+            canvas.rotate(snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y+bpHeightHalf);
+            mtx.setTranslate(-bpWidthHalf, -bpHeightHalf);
+            mtx.postTranslate(bpWidthHalf + snow.pathPoint.x, bpHeightHalf + snow.pathPoint.y);
+            canvas.drawBitmap(snow.snowBitmap, mtx, null);
+
+            final int W_CUT_RATIO = 7;
+            final int H_CUT_RATIO = 10;
+            float width = snow.snowBitmap.getWidth();
+            float height = snow.snowBitmap.getHeight();
+
+            if(snow.iconBitmap!=null){
+                mtx.setTranslate(snow.iconBitmap.getWidth() / 2,snow.iconBitmap.getHeight() / 2);
+                float iconX = snow.pathPoint.x + (width / W_CUT_RATIO) * 4 - 2;
+                float iconY = snow.pathPoint.y + (height / 5) * 2 - snow.iconBitmap.getHeight() * 2 - 10;
+                mtx.postTranslate(iconX,iconY);
+                canvas.drawBitmap(snow.iconBitmap,mtx,null);
+            }
+
+            paint.setAntiAlias(true);
+            paint.setStrokeWidth(1);
+            float cutHeightTop = 0;
+            float cutHeightBottom = 0;
+            tagLineColor = Color.BLACK;
+            if ("A".equals(snow.tplType) || "LOCAL1".equals(snow.tplType)){
+                tagColor = getResources().getColor(R.color.tag_1);
+                nameTextSize = 22;
+                contentTextSize = 26;
+                cutHeightTop = 28;
+                cutHeightBottom = 28;
+            }else if("C".equals(snow.tplType) || "LOCAL3".equals(snow.tplType)){
+                tagColor = getResources().getColor(R.color.tag_3);
+                nameTextSize = 20;
+                contentTextSize = 24;
+            }else{
+                tagColor = getResources().getColor(R.color.tag_2);
+                nameTextSize = 16;
+                contentTextSize = 20;
+                cutHeightTop = 28;
+            }
+            float [] posName = new float[snow.name.length() * 2];
+            for (int j = 0;j < posName.length ;j+=2){
+                posName[j] = snow.pathPoint.x + (width / W_CUT_RATIO) * 4 + (width / W_CUT_RATIO) /2;
+                if (j==0){
+                    posName[j+1] = snow.pathPoint.y + (height / 5) * 2 ;
+                }else {
+                    posName[j+1] = posName[j-1] + nameTextSize + 2;
+                }
+            }
+
+            setPaint(true,tagColor,Paint.Style.STROKE,nameTextSize);
+            canvas.drawPosText(snow.name, posName, paint);
+
+            setPaint(false,tagColor,Paint.Style.FILL,nameTextSize);
+            canvas.drawPosText(snow.name, posName, paint);
+
+
+            if(snow.content!=null && snow.content.length()>18){
+                snow.content = snow.content.substring(0,18);
+            }
+            float [] posContent = new float[snow.content.length() * 2];
+            float maxHeight = snow.pathPoint.y + (height / H_CUT_RATIO) * 7 + cutHeightBottom;
+            for (int j = 0;j < posContent.length ;j+=2){
+                float currentHeight;
+                if (j==0){
+                    posContent[j] = snow.pathPoint.x + (width / W_CUT_RATIO) * 3 + (width / W_CUT_RATIO) / 4;
+                    posContent[j+1] = snow.pathPoint.y + (height / H_CUT_RATIO) * 3 + cutHeightTop;
+                }else {
+                    currentHeight = posContent[j-1] + contentTextSize + 2;
+                    if(currentHeight >= maxHeight){
+                        posContent[j] = posContent[j-2] - width / W_CUT_RATIO;
+                        posContent[j+1] = snow.pathPoint.y + (height / H_CUT_RATIO) * 3 + cutHeightTop;
+                    }else {
+                        posContent[j] = posContent[j-2] ;
+                        posContent[j+1] = posContent[j-1] + contentTextSize + 2;
+                    }
+                }
+            }
+
+            setPaint(true,tagColor,Paint.Style.STROKE,contentTextSize);
+            canvas.drawPosText(snow.content, posContent, paint);
+
+
+            setPaint(false,tagColor,Paint.Style.FILL,contentTextSize);
+            canvas.drawPosText(snow.content, posContent, paint);
+
+            canvas.rotate(-snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y+bpHeightHalf);
+        }
+    }
+
+    private void setPaint(boolean boldBool , @ColorInt int color, Paint.Style style , int size){
+        paint.setFakeBoldText(boldBool);
+        paint.setColor(color);
+        paint.setStyle(style);
+        paint.setTextSize(size);
+    }
+
     private final int MSG_STOP = 0x01;
     private final int MSG_ADD_FULL = 0x02;
     private final int MSG_UPDATE = 0x03;
-    private final int MSG_ADD = 0x04;
+    private final int MSG_ADD_DELAY = 0x04;
+    private final int MSG_ADD = 0x05;
+    private static int localSnowListIndex = 0;
     @SuppressLint("HandlerLeak")
     private Handler handler = new Handler() {
         @Override
@@ -226,29 +271,62 @@ public class BalloonView extends View {
                 case MSG_ADD_FULL:
                     List<ParamsData> dataList = (List<ParamsData>) msg.obj;
                     for (ParamsData data : dataList){
-                        boolean isExist = false;
+                        boolean isSnowExist = false;
                         for (Snow snow : snowList){
                             if(data.getSid().equals(snow.sid)){
-                                isExist = true;
+                                isSnowExist = true;
                                 break;
                             }
                         }
-                        if (!isExist){
-                            Snow snow2 = getSnow();
-                            snow2.sid = data.getSid();
-                            snow2.content = data.getShowWords();
-                            snow2.name = data.getShowWords();
-                            snow2.tplType = data.getTpltype();
-                            Message message = new Message();
-                            message.what = MSG_ADD;
-                            message.obj = snow2;
-                            handler.sendMessageDelayed(message,500);
+                        boolean isParamsExist = false;
+                        for (ParamsData paramsData : cacheDataLinked){
+                            if(data.getSid().equals(paramsData.getSid())){
+                                isParamsExist =true;
+                                break;
+                            }
+                        }
+                        if (!isSnowExist && !isParamsExist){
+                            cacheDataLinked.addFirst(data);
+                            if(snowList.size() < coordinateList.size()){
+                                handler.sendEmptyMessage(MSG_ADD);
+                            }
                         }
                     }
                     break;
-                case MSG_ADD:
+                case MSG_ADD_DELAY:
                     Snow snow = (Snow) msg.obj;
                     snowList.add(snow);
+                    break;
+                case MSG_ADD:
+                    Log.d(TAG, "handleMessage() SnowList.add() cacheDataLinked.size = "+cacheDataLinked.size()+" ," +
+                            " snowList.size() = "+snowList.size());
+                    if(cacheDataLinked.size()==0 && snowList.size()<=2){
+                        int timeTmp = 0;
+
+                        if (snowList.size() == 0){
+                            for (ParamsData data : showList){
+                                ProduceSnowTask task = new ProduceSnowTask(data,timeTmp);
+                                otherHandler.post(task);
+                                timeTmp += 8000;
+                            }
+                        }else {
+                            if(localSnowListIndex > 2){
+                                localSnowListIndex = 0;
+                            }
+                            ParamsData data = showList.get(localSnowListIndex);
+                            ProduceSnowTask task = new ProduceSnowTask(data,timeTmp);
+                            otherHandler.post(task);
+                            localSnowListIndex++;
+                        }
+
+                    }else if(cacheDataLinked.size() > 0){
+                        ParamsData paramsData = cacheDataLinked.removeLast();
+                        ProduceSnowTask task = new ProduceSnowTask(paramsData);
+                        otherHandler.post(task);
+//                        Snow snow = getSnow(paramsData);
+//                        Log.d(TAG,"handleMessage()  SnowList.add() -> snow = "+snow.toString());
+//                        snowList.add(snow);
+                    }
                     break;
                 case MSG_STOP:
                     isDelyStop = true;
@@ -260,13 +338,94 @@ public class BalloonView extends View {
         }
     };
 
+    private List<ParamsData> getShowParamsList(){
+        String json =
+                "[{\"status\":\"waiting\",\"words\":\"祝：大家身体健康，万事如意快乐！\",\"sid\":\"test001\",\"playtime\":15,\"tpltype\":\"LOCAL1\"," +
+                        "\"synctime\":\"1618566735\",\"uname\":\"全体工作人员\",\"uicon\":\"http://139.155.180.131/icon.png\"}," +
+                        "{\"status\":\"waiting\",\"words\":\"祝：大家心情愉快！\",\"sid\":\"test002\",\"playtime\":15,\"tpltype\":\"LOCAL2\"," +
+                        "\"synctime\":\"1618567735\",\"uname\":\"全体工作人员\",\"uicon\":\"http://139.155.180.131/icon.png\"}," +
+                        "{\"status\":\"waiting\",\"words\":\"祝：大家节日快乐！\",\"sid\":\"test003\",\"playtime\":15,\"tpltype\":\"LOCAL3\"," +
+                        "\"synctime\":\"1618568735\",\"uname\":\"全体工作人员\",\"uicon\":\"http://139.155.180.131/icon.png\"}]";
+        try {
+            JSONArray jsonArray = new JSONArray(json);
+            Gson gson = new Gson();
+            List<ParamsData> dataList = gson.fromJson(jsonArray.toString(), new TypeToken<List<ParamsData>>(){}.getType());
+            return dataList;
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return new ArrayList<>();
+    }
+
+
+    private class ProduceSnowTask implements Runnable{
+        private ParamsData data;
+        private int timeDelay = 0;
+        public ProduceSnowTask(ParamsData paramsData){
+            this.data = paramsData;
+        }
+
+        public ProduceSnowTask(ParamsData data, int timeDelay) {
+            this.data = data;
+            this.timeDelay = timeDelay;
+        }
+
+        @Override
+        public void run() {
+            Snow snow = getSnow(data);
+            Message message = new Message();
+            message.what = MSG_ADD_DELAY;
+            message.obj = snow;
+            if(timeDelay==0){
+                handler.sendMessage(message);
+            }else {
+                handler.sendMessageDelayed(message,timeDelay);
+            }
+        }
+    }
+
+    private final int[] imgArray = {R.drawable.heart1,R.drawable.heart2,R.drawable.heart3};
+
+    @SuppressLint("CheckResult")
     @NotNull
-    private Snow getSnow() {
-        Random mRandom = new Random();
-        int index = mRandom.nextInt(imageArr.length);
-        BitmapDrawable bitmapDrawable = (BitmapDrawable) getResources().getDrawable(R.drawable.snow);
+    private Snow getSnow(ParamsData data) {
+        BitmapDrawable bitmapDrawable ;
+        String type = data.getTpltype();
+        if ("A".equals(type) || "LOCAL1".equals(type)){
+            bitmapDrawable = (BitmapDrawable) getResources().getDrawable(imgArray[0]);
+        }else if("B".equals(type) || "LOCAL2".equals(type)){
+            bitmapDrawable = (BitmapDrawable) getResources().getDrawable(imgArray[1]);
+        }else {
+            bitmapDrawable = (BitmapDrawable) getResources().getDrawable(imgArray[2]);
+        }
         Bitmap bitmap = bitmapDrawable.getBitmap();
-        return new Snow(xSpeed, ySpeed, bitmap);
+        Snow snow2 = new Snow(ySpeed, bitmap);
+        snow2.sid = data.getSid();
+        snow2.content = data.getWords();
+        snow2.name = data.getUname();
+        snow2.tplType = data.getTpltype();
+        Glide.with(App.getAppContext()).asBitmap().load(data.getUicon()).into(new SimpleTarget<Bitmap>() {
+            @Override
+            public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
+                Bitmap circleBitmap = Bitmap.createScaledBitmap(resource,
+                        25, 25, true);
+                snow2.iconBitmap = createCircleBitmap(circleBitmap);
+            }
+        });
+        return snow2;
+    }
+
+    private Bitmap createCircleBitmap(Bitmap resource)
+    {
+        int width = resource.getWidth();
+        Paint paint = new Paint();
+        paint.setAntiAlias(true);
+        Bitmap circleBitmap = Bitmap.createBitmap(width, width, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(circleBitmap);
+        canvas.drawCircle(width/2, width/2, width/2, paint);
+        paint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.SRC_IN));
+        canvas.drawBitmap(resource, 0, 0, paint);
+        return circleBitmap;
     }
 
 
@@ -283,101 +442,55 @@ public class BalloonView extends View {
         }
     }
 
+
     private void updateSnowView(){
         for (int i = 0; i< snowList.size();i++){
             Snow snow = snowList.get(i);
             if(snow.pathPoint.y > 0 && snow.pathPoint.y < snow.endPoint.y){
                 if(snow.timeCurrent == 0){
                     snow.timeCurrent = System.currentTimeMillis();
-                    snow.timeEnd = snow.timeCurrent + 15000;
+                    snow.timeEnd = snow.timeCurrent + delayTimeInt;
                 }
                 if(snow.timeCurrent < snow.timeEnd){
-                    snow.delayBool = true;
+                    snow.delayStatus = snow.DELAY_STATUS_STOP;
                     snow.timeCurrent = System.currentTimeMillis();
                 }
-                else snow.delayBool = false;
+                else snow.delayStatus = snow.DELAY_STATUS_END;
             }
-            if(!snow.delayBool){
-                snow.count+=0.001;
-                snow.pathPoint =  calculateBezierPointForQuadratic(snow.count,snow.startPoint,snow.controlPoint,snow.endPoint);
+            if(snow.delayStatus == snow.DELAY_STATUS_START) {
+                snow.count += 0.001;
+                snow.pathPoint = calculateBezierPointForQuadratic(snow.count, snow.startPoint, snow.controlPoint, snow.endPoint);
+            }else if (snow.delayStatus == snow.DELAY_STATUS_STOP){
+//                Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
+            }else if(snow.delayStatus == snow.DELAY_STATUS_END){
+                snow.pathPoint.y -= snow.ySpeed;
             }
+            if (snow.bitmapRotate > 10){
+                snow.forwardBool = false;
+            }else if(snow.bitmapRotate < -10){
+                snow.forwardBool = true;
+            }
+            if (snow.forwardBool){
+                snow.bitmapRotate += 0.08;
+            }else {
+                snow.bitmapRotate -= 0.08;
+            }
+
             if (snow.pathPoint.y < 0) {
-                if(snow.tplType!="00" && snow.sid !=null){
-                    Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
+                if((!"LOCAL1".equals(snow.tplType) && !"LOCAL2".equals(snow.tplType) &&
+                    !"LOCAL3".equals(snow.tplType)) && snow.sid !=null){
+                    Log.d(TAG, "updateSnowView: snow.tplType = "+snow.tplType);
                     SaveTaskManager.getInstance().saveSnowTask(snow);
                 }
+                Log.d(TAG, "onAnimationUpdate() SnowList.remove() -> snow = "+snow.toString());
                 snowList.remove(i);
+                if(snowList.size() < coordinateList.size()){
+                    handler.sendEmptyMessage(MSG_ADD);
+                }
             }
         }
-        if (snowList.size() <= 0 && animator.isRunning()){
-            Snow snow = getSnow();
-            snow.tplType = "00";
-            snow.content = "祝我的家人幸福安康，永远幸福！";
-            snow.name = "用户的名字";
-            snowList.add(snow);
-        }
-
         invalidate();
     }
-
-//    private void updateSnowView(){
-//        for (int i = 0; i < snowList.size(); i++) {
-//            Snow snow = snowList.get(i);
-//
-//            if(snow.y > 0 && snow.y < snow.endY){
-//                snow.x += (snow.xSpeed/2);
-//                if(snow.timeCurrent == 0){
-//                    snow.timeCurrent = System.currentTimeMillis();
-//                    snow.timeEnd = snow.timeCurrent + 15000;
-//                }
-//                if(snow.timeCurrent < snow.timeEnd){
-//                    snow.delayBool = true;
-//                    snow.timeCurrent = System.currentTimeMillis();
-//                }
-//                else snow.delayBool = false;
-//            }
-//            if(!snow.delayBool){
-//                snow.y -= snow.ySpeed;
-//                snow.x += snow.xSpeed;
-//            }
-//            snow.snowBitmap = BitmapFactory.decodeResource(getContext().getResources(), R.drawable.snow);
-////            Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
-//            if (snow.x < -snow.bpWidth || snow.x > getWidth()){
-//
-//                if (isDelyStop)
-//                    snowList.remove(i);
-//                else {
-//                    snow.x = randomX();
-//                    snow.y = randomY(snow.bpHeight);
-//                }
-//            }
-//            else if (snow.y < 0) {
-//                if (isDelyStop)
-//                    snowList.remove(i);
-//                else {
-//                    if(snow.tplType!="00" && snow.sid !=null){
-//                        Log.d(TAG, "onAnimationUpdate() snow = "+snow.toString());
-//                        SaveTaskManager.getInstance().saveSnowTask(snow);
-//                    }
-//                    snowList.remove(i);
-//                }
-//            }
-//        }
-//        /**
-//         * to prevent the animator running empty
-//         */
-//        if (snowList.size() <= 0 && animator.isRunning()){
-//            Snow snow = getSnow();
-//            snow.tplType = "00";
-//            snow.content = "祝我的家人幸福安康，永远幸福！";
-//            snow.name = "用户的名字";
-//            snowList.add(snow);
-//        }
-//
-//        invalidate();
-//    }
-
-
 
     public static PointF calculateBezierPointForQuadratic(float t, PointF p0, PointF p1, PointF p2) {
         PointF point = new PointF();
@@ -389,108 +502,123 @@ public class BalloonView extends View {
 
     public class Snow {
 
-
+        final int DELAY_STATUS_START = 100;
+        final int DELAY_STATUS_STOP = 200;
+        final int DELAY_STATUS_END = 300;
 
         public String sid;
         float count = 0;
         private String name;
         private String content;
-        private PointF startPoint = new PointF();
-        private PointF pathPoint = new PointF();
-        private PointF endPoint = new PointF();
-        private PointF controlPoint = new PointF();
-        private float ySpeed;
-        private int bpHeight;
-        private int bpWidth;
-        private Bitmap snowBitmap;
+        private final PointF startPoint = new PointF();
+        private PointF pathPoint ;
+        private PointF endPoint ;
+        private PointF controlPoint ;
+        private final float ySpeed;
+        private final int bpHeight;
+        private final int bpWidth;
+        private final Bitmap snowBitmap;
+        private Bitmap iconBitmap ;
         private long timeCurrent = 0;
         private long timeEnd = 0;
-        private boolean delayBool = false;
-        private float BASESPEED = 100.0f;
+        private float bitmapRotate = 0;
+        private boolean forwardBool = true;
+        private int delayStatus = DELAY_STATUS_START;
+        private final float BASESPEED = 100.0f;
         private String tplType;
 
-        Snow(float xSpeed, float ySpeed, Bitmap snowBitmap) {
-            float tempScale = minScale + (float) (Math.random() * (maxScale - minScale));
-            this.bpHeight = (int) (snowBitmap.getHeight() * tempScale);
-            this.bpWidth = (int) (snowBitmap.getWidth() * tempScale);
-            this.startPoint.x = xWidth / 2;
+        Snow(float ySpeed, Bitmap snowBitmap) {
+            this.bpHeight = snowBitmap.getHeight() / 8;
+            this.bpWidth = snowBitmap.getWidth() / 8;
+            this.startPoint.x = randomX();
             this.startPoint.y = randomY(bpHeight);
             this.pathPoint = this.startPoint;
-            this.endPoint.x = randomEndX();
-            this.endPoint.y = randomEndY();
-
+            this.endPoint = getEndPointF();
             this.controlPoint = getControlPointF(startPoint,endPoint);
-            float xDirection = 1.0f - (float) (Math.random() * 2.0f);
-//            this.xSpeed = getXSpeed(x, endX ,y, endY,ySpeed);
-//            this,xSpeed = 3L;
-//            this.xSpeed = xSpeed * xDirection / BASESPEED;
             this.ySpeed = (ySpeed + ySpeed * (float) Math.random()) / BASESPEED;
             this.snowBitmap = Bitmap.createScaledBitmap(snowBitmap, bpWidth, bpHeight, true);
         }
 
+        @Override
+        public String toString() {
+            return "Snow{" +
+                    "sid='" + sid + '\'' +
+                    ", count=" + count +
+                    ", name='" + name + '\'' +
+                    ", content='" + content + '\'' +
+                    ", startPoint=" + startPoint +
+                    ", pathPoint=" + pathPoint +
+                    ", endPoint=" + endPoint +
+                    '}';
+        }
     }
 
+
+    private static int currentIndex = 0;
+    private PointF getEndPointF(){
+        if(currentIndex >= coordinateList.size()){
+            currentIndex = 0;
+        }
+        PointF endPoint = new PointF();
+        endPoint.x = coordinateList.get(currentIndex).x;
+        endPoint.y = coordinateList.get(currentIndex).y + 30;
+        currentIndex++;
+        return endPoint;
+    }
 
     private PointF getControlPointF(PointF startPoint , PointF endPoint){
         PointF controlPoint = new PointF();
-        if(startPoint.x > endPoint.x){
-            controlPoint.x = startPoint.x - endPoint.y;
-        }else{
-            controlPoint.x = endPoint.x - startPoint.y;
-        }
         if (startPoint.y > endPoint.y){
-            controlPoint.y = startPoint.y - endPoint.y;
+            controlPoint.y = endPoint.y + (startPoint.y - endPoint.y)/2;
         }else {
-            controlPoint.y =endPoint.y - startPoint.y;
+            controlPoint.y =startPoint.y + (endPoint.y - startPoint.y)/2;
         }
+        controlPoint.x = startPoint.x;
+        controlPoint.x = xWidth / 2;
+        controlPoint.y = yHeight /2;
         return controlPoint;
     }
 
-
-
-    private float getXSpeed( float startX,float endX, float starty , float endy , float ySpeed){
-        float y = starty - endy;
-        float count = (y * 1000) / DEFAULTDURATION;
-        float x = endX - startX;
-        float speed = x / (count/4);
-        Log.e(TAG, "getXSpeed: speed = "+speed);
-        return speed;
-    }
-
-    private float randomEndX(){
-        int width = (int )xWidth/3;
-        float endX = xRandom.nextInt(width)+width;
-        Log.e(TAG, "randomEndX: endX = "+endX);
-        return endX;
-    }
-
-    private float randomEndY(){
-        int height = (int) yHeight / 3;
-        float endY = xRandom.nextInt(height) + height;
-        return endY;
-    }
-
-    /**
-     * the x coordinate
-     */
-    private int[] widthArr = {5,6,7,8};
+    private final int[] widthArr = {5,6,7,8};
     private int widthIndex = 0;
     private float randomX() {
         float width = (xWidth / 12 )* widthArr[widthIndex];
-        Log.d(TAG, "randomX: width = "+width);
+        Log.d(TAG, "randomX() -> xWidth = "+width);
         widthIndex++;
         if (widthIndex>=widthArr.length) widthIndex = 0;
         return width;
     }
 
-    /**
-     * the y coordinate
-     */
     private float randomY(int bpHeight) {
         float nextFloat = yRandom.nextFloat() * bpHeight;
-        Log.d(TAG, "randomY: yHeight = "+yHeight + " , nextFloat = "+nextFloat);
-        return yHeight - (initToBottom + nextFloat);
+        Log.d(TAG, "randomY() yHeight = "+(yHeight - nextFloat));
+        return yHeight - nextFloat;
     }
+
+
+    private List<Coordinate> getCoordinate(){
+        List<Coordinate> dataList = new ArrayList<>();
+        try {
+            JSONObject jsonObject = new JSONObject(JSON);
+            String jsonArr = jsonObject.getString("coordinate");
+            Gson gson = new Gson();
+            dataList = gson.fromJson(jsonArr, new TypeToken<List<Coordinate>>(){}.getType());
+            L.d(TAG, "getCoordinate() size = "+dataList.size());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return dataList;
+    }
+
+    class Coordinate {
+        int x;
+        int y;
+    }
+
+    private final String JSON = "{\"coordinate\":[" +
+            "{\"x\":210,\"y\":380},{\"x\":850,\"y\":430},{\"x\":1280,\"y\":440},{\"x\":1650,\"y\":450}," +
+            "{\"x\":950,\"y\":60},{\"x\":1180,\"y\":140},{\"x\":730,\"y\":130},{\"x\":410,\"y\":290}," +
+            "{\"x\":590,\"y\":400},{\"x\":1030,\"y\":370},{\"x\":1470,\"y\":330}]}";
 
 
 }

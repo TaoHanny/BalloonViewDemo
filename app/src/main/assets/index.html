@@ -34,13 +34,18 @@
         </div>
 			<br>	
 			最大标签数:<br>
-			<input type="text" name="max" id="max">
+			<input type="text" name="max" id="max" value="41">
+            <br>
+            许愿标签(0.1~2):<br>
+            <input type="text" name="scale" id="scale" value="1">
+            <br>
 		<button id="btn">点击发送post请求</button>
 	</body>
     <script type="text/javascript">
         let coordinate = []
         const canvas =  document.querySelector('#canvas')
         const ctx = canvas.getContext("2d")
+       
         let x = 0
         let y = 0
         document.querySelector('#grid').onclick = (e)=>{
@@ -67,8 +72,19 @@
 
                 $('#btn').click(function() {
                 var paramsJson = JSON.stringify(coordinate);
+                if(paramsJson == null || paramsJson.length <= 2 || paramsJson == "[]"){
+                    alert("坐标区域不得为空！");
+                    console.log("坐标区域不得为空！");
+                    return;
+                }
 				var max = document.getElementById("max").value;
-				var json = "{\"coordinate\":"+paramsJson+",\"max\":"+max+"}";
+                var scale = document.getElementById("scale").value;
+                if(scale == null || scale <= 0 || scale >2){
+                    alert("许愿标签大小必须在0.1~2以内");
+                    console.log("许愿标签大小必须在0.1~2以内");
+                    return;
+                } 
+				var json = "{\"coordinate\":"+paramsJson+",\"max\":"+max+",\"scale\":"+scale+"}";
                 console.log(paramsJson);
 				console.log(max);
 				console.log(json);

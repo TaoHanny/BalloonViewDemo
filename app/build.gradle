@@ -6,22 +6,54 @@ android {
     compileSdkVersion 30
     buildToolsVersion "29.0.3"
 
+    signingConfigs {
+        release {
+            keyAlias 'tree'
+            keyPassword '123456'
+            storeFile file('../key/tree.jks')
+            storePassword '123456'
+        }
+        debug {
+            keyAlias 'tree'
+            keyPassword '123456'
+            storeFile file('../key/tree.jks')
+            storePassword '123456'
+        }
+    }
+
     defaultConfig {
         applicationId "com.instwall.balloonviewdemo"
         minSdkVersion 21
         targetSdkVersion 30
-        versionCode 1
-        versionName "1.0"
+        versionCode 1_001_0
+        versionName "1.1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+
     }
 
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.debug
         }
     }
+
+    android.applicationVariants.all { variant ->
+        variant.outputs.all {
+            outputFileName = "InstwallBalloonView-${variant.versionName}-${variant.buildType.name}.apk"
+        }
+    }
+    packagingOptions {
+        exclude 'resources.arsc'
+        exclude '**.**'
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -37,7 +69,10 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.3.0'
     api 'com.instwall.server:new_netcore:1.57'
+    api 'com.instwall.server:new_screen:1.18'
     api 'com.instwall.server:new_im:1.17'
     implementation 'com.google.code.gson:gson:2.8.6'
     implementation 'com.koushikdutta.async:androidasync:2.2.1'
+    implementation 'com.github.bumptech.glide:glide:4.11.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.11.0'
 }

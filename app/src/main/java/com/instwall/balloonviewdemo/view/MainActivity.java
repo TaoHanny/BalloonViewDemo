@@ -31,8 +31,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 
+import ashy.earl.common.util.L;
 import ashy.earl.common.util.NetworkChangeHelper;
 
 public class MainActivity extends AppCompatActivity {
@@ -51,13 +53,19 @@ public class MainActivity extends AppCompatActivity {
         videoView = findViewById(R.id.videoView);
         flyView = findViewById(R.id.fly_view);
         manager = SaveTaskManager.getInstance();
+    }
+
+
+    @Override
+    protected void onStart() {
+        super.onStart();
 
         manager.addListener(onSaveListener);
         mImClient.addListener(mImListener);
         mNetwork.addNetworkListener(mNetworkListener);
-
         flyView.setSnowDuration(200);
         handler.sendEmptyMessageDelayed(MSG_FLY_START,1000);
+//        handler.sendEmptyMessage(MSG_FLY_TEST);
     }
 
     @Override
@@ -70,7 +78,6 @@ public class MainActivity extends AppCompatActivity {
         WebService.setListener(new WebService.OnLocalListener() {
             @Override
             public void onPostData(String json) {
-                sendLayoutPath(json);
                 manager.saveConfigJsonTask(json);
             }
         });
@@ -89,9 +96,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-        manager.remoteListener(onSaveListener);
         WebService.stop(this);
+        manager.remoteListener(onSaveListener);
         mImClient.removeListener(mImListener);
+        mNetwork.removeNetworkListener(mNetworkListener);
     }
 
 
@@ -106,12 +114,14 @@ public class MainActivity extends AppCompatActivity {
             if (json == null || !"pt_showdatas_forbless".equals(json.optString("cmd"))) {
                 return;
             }
+            L.d(TAG,"{ImClient}@newMsg = "+ json.toString());
             manager.getHttpTask();
         }
     };
 
     private final int MSG_PATH = 0x11;
     private final int MSG_FLY_START = 0x12;
+//    private final int MSG_FLY_TEST = 0x13;
     @SuppressLint("HandlerLeak")
     final Handler handler = new Handler(){
         @Override
@@ -121,15 +131,16 @@ public class MainActivity extends AppCompatActivity {
                 String json = (String) msg.obj;
                 new PathInfo.Builder(new TreePathGenerator(json), flyView)
                         .setApplyFlag(PathInfo.APPLY_FLAG_DRAW_AND_TOUCH)
-                        .setClipType(PathInfo.CLIP_TYPE_IN)
-                        .create()
-                        .apply();
+                        .setClipType(PathInfo.CLIP_TYPE_IN).create().apply();
             }else if (MSG_FLY_START == msg.what){
                 flyView.startAnimation();
             }
+//            if (MSG_FLY_TEST == msg.what){
+//                updateData();
+//                handler.sendEmptyMessageDelayed(MSG_FLY_TEST,1000);
+//            }
         }
     };
-
     private static boolean IS_REBOOT_OR_NETWOEK = true;
     private OnSaveListener onSaveListener = new OnSaveListener() {
         @Override
@@ -138,12 +149,14 @@ public class MainActivity extends AppCompatActivity {
                 updateData(json);
             else if(type == OnSaveListener.TYPE_CONFIG_JSON){
                 sendLayoutPath(json);
+//                handler.sendEmptyMessageDelayed(MSG_FLY_TEST,1000);
             }
         }
 
         @Override
         public void onReportStatus(int status) {
             if(OnSaveListener.REPORT_DONE == status){
+                //当重启或者断网重连后，只限首次推送数据后，主动拉取数据
                 if(IS_REBOOT_OR_NETWOEK){
                     manager.getHttpTask();
                     manager.getConfigJsonTask();
@@ -160,9 +173,11 @@ public class MainActivity extends AppCompatActivity {
         handler.sendMessage(message);
     }
 
+
+
     private void updateData(String json){
         try {
-            JSONArray jsonArray = new JSONArray(JSON);
+            JSONArray jsonArray = new JSONArray(json);
             if(jsonArray == null || jsonArray.length() == 0) return;
             Gson gson = new Gson();
             List<ParamsData> dataList = gson.fromJson(jsonArray.toString(), new TypeToken<List<ParamsData>>(){}.getType());
@@ -175,15 +190,31 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onNetworkChanged(boolean hasActiveNetwork, String type, String name) {
             if(hasActiveNetwork){
-                Log.d(TAG, "onNetworkChanged: has active network");
+                L.d(TAG, "onNetworkChanged: has active network");
                 manager.reportDataTask();
             }else {
-                Log.d(TAG, "onNetworkChanged: hasnot active network");
+                L.d(TAG, "onNetworkChanged: hasnot active network");
                 IS_REBOOT_OR_NETWOEK = true;
             }
         }
     };
 
+
+    private List<ParamsData> dataList = new ArrayList<>();
+
+    private void updateData(){
+        ParamsData paramsData = new ParamsData();
+        long timeTmp = System.currentTimeMillis() / 1000 - 7300;
+        paramsData.setSid(timeTmp+"");
+        paramsData.setSynctime(timeTmp+"");
+        paramsData.setWords("祝大家节日快乐");
+        paramsData.setTpltype("C");
+        if(dataList.size() > 200) {
+            dataList.clear();
+        }
+        dataList.add(paramsData);
+        flyView.pushSnows(dataList);
+    }
 
 
     private String JSON = "[{\"status\":\"waiting\",\"showWords\":\"祝大家节日快乐\",\"sid\":\"test003\",\"playtime\":15,\"tpltype\":\"C\",\"synctime\":" +

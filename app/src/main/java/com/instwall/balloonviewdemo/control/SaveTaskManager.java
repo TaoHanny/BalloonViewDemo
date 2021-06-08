@@ -21,6 +21,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.List;
 
+import ashy.earl.common.util.L;
 import ashy.earl.net.Callback;
 
 public class SaveTaskManager {
@@ -105,29 +106,30 @@ public class SaveTaskManager {
                 @Override
                 public void onResult(String rst, NetCoreException e) {
                     if(e != null){
-                        Log.d(TAG, "onResult() e = "+e.toString());
+                        L.d(TAG, "onResult() e = "+e.toString());
                         notifyStatus(OnSaveListener.REPORT_ERROR);
+                        handler.postDelayed(new ReportTask(),5000);
                     }
                     if(!TextUtils.isEmpty(rst)){
-                        Log.d(TAG, "onResult() rst = "+rst);
+                        L.d(TAG, "onResult() rst = "+rst);
                         List<Rpt_data> list;
                         Gson gson = new Gson();
                         if(info!=null && !"".equals(info)) {
                             list = gson.fromJson(info, new TypeToken<List<Rpt_data>>(){}.getType());
                             if(list==null || list.size() <= 0) return;
                             List<Rpt_data> cacheList = new ArrayList<>(list);
-                            for (Rpt_data data : list){
+                            for (int i = 0; i < list.size(); i++){
+                                Rpt_data data = list.get(i);
                                 long currentTime = System.currentTimeMillis() / 1000;
                                 long difference = currentTime - data.getSyncTime();
                                 //大于两小时，清除本地缓存
                                 if(difference > 7200){
-                                    cacheList.remove(data);
+                                    cacheList.remove(i);
                                 }
                             }
-                            if(cacheList.size()>0){
-                                String json = gson.toJson(cacheList,new TypeToken<List<Rpt_data>>(){}.getType());
-                                SaveUtil.writeInfo(json);
-                            }
+                            String cacheJson = gson.toJson(cacheList,new TypeToken<List<Rpt_data>>(){}.getType());
+                            Log.d(TAG, "ReportTask() -> cacheJSon = "+cacheJson);
+                            SaveUtil.writeInfo(cacheJson);
                         }
                         notifyStatus(OnSaveListener.REPORT_DONE);
                     }
@@ -145,10 +147,10 @@ public class SaveTaskManager {
                 @Override
                 public void onResult(String rst, NetCoreException e) {
                     if(e != null){
-                        Log.d(TAG, "onResult() e = "+e.toString());
+                        L.d(TAG, "onResult() e = "+e.toString());
                     }
                     if(!TextUtils.isEmpty(rst)){
-                        Log.d(TAG, "onResult() rst = "+rst);
+                        L.d(TAG, "onResult() rst = "+rst);
                         try {
                             JSONObject bodyJson = new JSONObject(rst);
                             JSONArray dataArray = bodyJson.optJSONArray("data");
@@ -177,7 +179,7 @@ public class SaveTaskManager {
         @Override
         public void run() {
             String json = SaveUtil.readConfigInfo();
-            Log.d(TAG, "GetConfigJsonTask() -> json = "+json);
+            L.d(TAG, "GetConfigJsonTask() -> json = "+json);
             if(json != null && !"".equals(json)){
                 notifyData(OnSaveListener.TYPE_CONFIG_JSON,json);
             }
@@ -192,6 +194,7 @@ public class SaveTaskManager {
         @Override
         public void run() {
             SaveUtil.writeConfigJson(json);
+            getConfigJsonTask();
         }
     }
 

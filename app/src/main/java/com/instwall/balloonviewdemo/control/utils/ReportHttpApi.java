@@ -52,7 +52,7 @@ public class ReportHttpApi extends ApiBase<String> {
 
 
 
-    private final String URL = "http://smp.instwall.com/openapi/json";
+    private final String URL = "http://grayds.instwall.com/openapi/json";
     private Request getRequest(){
         Request request = null;
         try {
@@ -93,8 +93,8 @@ public class ReportHttpApi extends ApiBase<String> {
         long timeTmp = System.currentTimeMillis() / 1000;
         return "{\n" +
                 "    \"oauth2\":{\n" +
-                "        \"client_id\":\"TZifubgLzkrZnF7p8oJOuGqQ\",\n" +
-                "        \"client_secret\":\"dRpXyEl4MlUsagt-pcyU0xIadtfbzf\"\n" +
+                "        \"client_id\":\"CO0syCzWJzzDUY9pVPCb1rhC\",\n" +
+                "        \"client_secret\":\"4eZ1Z5CbJvShWNAm.7L7rBdx5naRNP\"\n" +
                 "    },\n" +
                 "    \"id\":"+timeTmp+",\n" +
                 "    \"method\":\"rpt_showdata_status\"\n" +

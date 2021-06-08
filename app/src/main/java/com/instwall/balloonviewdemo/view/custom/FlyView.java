@@ -75,21 +75,11 @@ public class FlyView extends View {
 
     private void initAttr(Context context, AttributeSet attrs) {
         TypedArray attributes = context.obtainStyledAttributes(attrs, R.styleable.FlyView);
-        int initTo = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initTo, 0);
-        initToTop = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToTop, 0);
-        initToLeft = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToLeft, 0);
-        initToBottom = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToBottom, 0);
-        initToRight = attributes.getDimensionPixelSize(R.styleable.FlyView_snow_initToRight, 0);
-        minScale = attributes.getFloat(R.styleable.FlyView_snow_minScale, 1.0f);
-        maxScale = attributes.getFloat(R.styleable.FlyView_snow_maxScale, 1.0f);
-        xSpeed = attributes.getFloat(R.styleable.FlyView_snow_xSpeed, 0.0f);
-        ySpeed = attributes.getFloat(R.styleable.FlyView_snow_ySpeed, 100.0f);
-        snowCount = attributes.getInt(R.styleable.FlyView_snow_count, 20);
-        snowDuration = attributes.getInt(R.styleable.FlyView_snow_duration, 0);
-        snowBitmap = (BitmapDrawable) attributes.getDrawable(R.styleable.FlyView_snow_bitmap);
 
-        if (0 != initTo)
-            initToTop = initToLeft = initToBottom = initToRight = initTo;
+        ySpeed = attributes.getFloat(R.styleable.FlyView_snow_ySpeed, 100.0f);
+        snowDuration = attributes.getInt(R.styleable.FlyView_snow_duration, 0);
+
+
         if (minScale <= 0.0f || minScale > maxScale)
             throw new IllegalArgumentException("The minScale is illegal");
         sendMsgable = snowDuration > DEFAULTDURATION;
@@ -128,7 +118,7 @@ public class FlyView extends View {
         }
     }
 
-    private int[] imageArr = {R.drawable.snowflake,R.drawable.heart1,R.drawable.heart2,R.drawable.heart5};
+    private int[] imageArr = {R.drawable.heart1,R.drawable.heart2,R.drawable.heart3};
 
     /**
      * init snowList
