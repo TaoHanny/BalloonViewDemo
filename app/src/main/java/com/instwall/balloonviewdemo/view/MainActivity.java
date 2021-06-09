@@ -64,8 +64,8 @@ public class MainActivity extends AppCompatActivity {
         mImClient.addListener(mImListener);
         mNetwork.addNetworkListener(mNetworkListener);
         flyView.setSnowDuration(200);
-        handler.sendEmptyMessageDelayed(MSG_FLY_START,1000);
-//        handler.sendEmptyMessage(MSG_FLY_TEST);
+        handler.sendEmptyMessageDelayed(MSG_FLY_START,2000);
+//        handler.sendEmptyMessageDelayed(MSG_FLY_TEST,5000);
     }
 
     @Override
@@ -81,7 +81,6 @@ public class MainActivity extends AppCompatActivity {
                 manager.saveConfigJsonTask(json);
             }
         });
-
         videoView.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
 
             @Override
@@ -122,23 +121,30 @@ public class MainActivity extends AppCompatActivity {
     private final int MSG_PATH = 0x11;
     private final int MSG_FLY_START = 0x12;
 //    private final int MSG_FLY_TEST = 0x13;
+    private int currentIndex = 0;
     @SuppressLint("HandlerLeak")
     final Handler handler = new Handler(){
         @Override
         public void handleMessage(@NonNull Message msg) {
             super.handleMessage(msg);
-            if(msg.what == MSG_PATH){
-                String json = (String) msg.obj;
-                new PathInfo.Builder(new TreePathGenerator(json), flyView)
-                        .setApplyFlag(PathInfo.APPLY_FLAG_DRAW_AND_TOUCH)
-                        .setClipType(PathInfo.CLIP_TYPE_IN).create().apply();
-            }else if (MSG_FLY_START == msg.what){
-                flyView.startAnimation();
+            switch (msg.what){
+                case MSG_PATH:
+                    String json = (String) msg.obj;
+                    new PathInfo.Builder(new TreePathGenerator(json), flyView)
+                            .setApplyFlag(PathInfo.APPLY_FLAG_DRAW_AND_TOUCH)
+                            .setClipType(PathInfo.CLIP_TYPE_IN).create().apply();
+                    break;
+                case MSG_FLY_START:
+                    flyView.startAnimation();
+                    break;
+//                case MSG_FLY_TEST:
+//                    updateData();
+//                    if(currentIndex < 10){
+//                        currentIndex++;
+//                        handler.sendEmptyMessageDelayed(MSG_FLY_TEST,5000);
+//                    }
+//                    break;
             }
-//            if (MSG_FLY_TEST == msg.what){
-//                updateData();
-//                handler.sendEmptyMessageDelayed(MSG_FLY_TEST,1000);
-//            }
         }
     };
     private static boolean IS_REBOOT_OR_NETWOEK = true;
@@ -202,17 +208,25 @@ public class MainActivity extends AppCompatActivity {
 
     private List<ParamsData> dataList = new ArrayList<>();
 
+    private int index = 0;
     private void updateData(){
-        ParamsData paramsData = new ParamsData();
-        long timeTmp = System.currentTimeMillis() / 1000 - 7300;
-        paramsData.setSid(timeTmp+"");
-        paramsData.setSynctime(timeTmp+"");
-        paramsData.setWords("祝大家节日快乐");
-        paramsData.setTpltype("C");
-        if(dataList.size() > 200) {
-            dataList.clear();
+        for (int i = 0; i < 1; i++) {
+            ParamsData paramsData = new ParamsData();
+            long timeTmp = System.currentTimeMillis() / 1000 - 7300;
+            paramsData.setSid(timeTmp+""+index);
+            paramsData.setSynctime(timeTmp+"");
+            paramsData.setWords("祝大家节日快乐");
+            paramsData.setUname("test"+index);
+            paramsData.setTpltype("C");
+            paramsData.setPlaytime(1000 * 15);
+//            if(dataList.size() > 200) {
+//                dataList.clear();
+//            }
+
+            index++;
+            dataList.add(paramsData);
         }
-        dataList.add(paramsData);
+        Log.d(TAG, "updateData: index = "+index);
         flyView.pushSnows(dataList);
     }
 

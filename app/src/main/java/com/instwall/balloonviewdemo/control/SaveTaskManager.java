@@ -19,6 +19,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import ashy.earl.common.util.L;
@@ -108,7 +109,7 @@ public class SaveTaskManager {
                     if(e != null){
                         L.d(TAG, "onResult() e = "+e.toString());
                         notifyStatus(OnSaveListener.REPORT_ERROR);
-                        handler.postDelayed(new ReportTask(),5000);
+                        handler.postDelayed(new ReportTask(),10000);
                     }
                     if(!TextUtils.isEmpty(rst)){
                         L.d(TAG, "onResult() rst = "+rst);
@@ -117,17 +118,16 @@ public class SaveTaskManager {
                         if(info!=null && !"".equals(info)) {
                             list = gson.fromJson(info, new TypeToken<List<Rpt_data>>(){}.getType());
                             if(list==null || list.size() <= 0) return;
-                            List<Rpt_data> cacheList = new ArrayList<>(list);
-                            for (int i = 0; i < list.size(); i++){
-                                Rpt_data data = list.get(i);
+                            Iterator<Rpt_data> iterator = list.iterator();
+                            while (iterator.hasNext()) {
+                                Rpt_data data = iterator.next();
                                 long currentTime = System.currentTimeMillis() / 1000;
                                 long difference = currentTime - data.getSyncTime();
-                                //大于两小时，清除本地缓存
-                                if(difference > 7200){
-                                    cacheList.remove(i);
+                                if(difference > 7200) {
+                                    iterator.remove();//使用迭代器的删除方法删除
                                 }
                             }
-                            String cacheJson = gson.toJson(cacheList,new TypeToken<List<Rpt_data>>(){}.getType());
+                            String cacheJson = gson.toJson(list,new TypeToken<List<Rpt_data>>(){}.getType());
                             Log.d(TAG, "ReportTask() -> cacheJSon = "+cacheJson);
                             SaveUtil.writeInfo(cacheJson);
                         }

@@ -1,6 +1,6 @@
 package com.instwall.balloonviewdemo.model;
 
-public class ParamsData {
+public class ParamsData implements Comparable<ParamsData>{
     private String status;
     private String words = " ";
     private String uname = " ";
@@ -65,6 +65,13 @@ public class ParamsData {
 
     public void setUicon(String uicon) {
         this.uicon = uicon;
+    }
+
+    @Override
+    public int compareTo(ParamsData data) {
+        long one = Long.parseLong(this.synctime);
+        long two = Long.parseLong(data.getSynctime());
+        return (int)(one - two);
     }
 }
 

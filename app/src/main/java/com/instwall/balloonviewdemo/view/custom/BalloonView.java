@@ -42,6 +42,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
@@ -55,14 +56,14 @@ public class BalloonView extends View {
 
     private float ySpeed;
     private long snowDuration;
-    private volatile List<Snow> snowList;
+    private static volatile List<Snow> snowList;
     private Matrix mtx = new Matrix();
     private ValueAnimator animator;
     private Random yRandom = new Random();
     private boolean isDelyStop;
     private boolean sendMsgable;
 
-    private LinkedList<ParamsData> cacheDataLinked = new LinkedList<>();
+    private static volatile LinkedList<ParamsData> cacheDataLinked = new LinkedList<>();
     private float xWidth;
     private float yHeight;
     private int delayTimeInt = 55000;
@@ -98,12 +99,12 @@ public class BalloonView extends View {
         setLayerType(View.LAYER_TYPE_NONE, null);
         snowList = new ArrayList<>();
         showList = getShowParamsList();
+        coordinateList = getCoordinate();
         animator = ValueAnimator.ofFloat(1.0f, 0.0f);
         animator.setRepeatCount(ValueAnimator.INFINITE);
         animator.setDuration(DEFAULTDURATION);
         animator.addUpdateListener(new animatorUpdateListenerImp());
-        coordinateList = getCoordinate();
-        handler.sendEmptyMessageDelayed(MSG_ADD,5000);
+        handler.sendEmptyMessageDelayed(MSG_ADD,10000);
     }
 
     public void startAnimation(){
@@ -122,12 +123,7 @@ public class BalloonView extends View {
         sendMsgable = snowDuration > DEFAULTDURATION;
     }
 
-    public void pushSnows(List<ParamsData> list){
-        Message message= new Message();
-        message.what = MSG_ADD_FULL;
-        message.obj = list;
-        handler.sendMessage(message);
-    }
+
 
     @Override
     protected void onDetachedFromWindow() {
@@ -160,7 +156,11 @@ public class BalloonView extends View {
             Snow snow = snowList.get(i);
             float bpWidthHalf = snow.bpWidth / 2;
             float bpHeightHalf = snow.bpHeight / 2;
-            canvas.rotate(snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y+bpHeightHalf);
+            if(snow.delayStatus == snow.DELAY_STATUS_START){
+                canvas.rotate(snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y+bpHeightHalf);
+            }else {
+                canvas.rotate(snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y);
+            }
             mtx.setTranslate(-bpWidthHalf, -bpHeightHalf);
             mtx.postTranslate(bpWidthHalf + snow.pathPoint.x, bpHeightHalf + snow.pathPoint.y);
             canvas.drawBitmap(snow.snowBitmap, mtx, null);
@@ -245,7 +245,11 @@ public class BalloonView extends View {
             setPaint(false,tagColor,Paint.Style.FILL,contentTextSize);
             canvas.drawPosText(snow.content, posContent, paint);
 
-            canvas.rotate(-snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y+bpHeightHalf);
+            if(snow.delayStatus == snow.DELAY_STATUS_START){
+                canvas.rotate(-snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y+bpHeightHalf);
+            }else {
+                canvas.rotate(-snow.bitmapRotate,snow.pathPoint.x+bpWidthHalf,snow.pathPoint.y);
+            }
         }
     }
 
@@ -256,6 +260,14 @@ public class BalloonView extends View {
         paint.setTextSize(size);
     }
 
+    private static boolean firstStartViewBool = true;
+    public void pushSnows(List<ParamsData> list){
+        otherHandler.post(new PushDataTask(list));
+
+    }
+
+
+    private LinkedList<Snow> snowLinkedList = new LinkedList<>();
     private final int MSG_STOP = 0x01;
     private final int MSG_ADD_FULL = 0x02;
     private final int MSG_UPDATE = 0x03;
@@ -268,41 +280,46 @@ public class BalloonView extends View {
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
             switch (msg.what){
-                case MSG_ADD_FULL:
-                    List<ParamsData> dataList = (List<ParamsData>) msg.obj;
-                    for (ParamsData data : dataList){
-                        boolean isSnowExist = false;
-                        for (Snow snow : snowList){
-                            if(data.getSid().equals(snow.sid)){
-                                isSnowExist = true;
-                                break;
+                case MSG_ADD_DELAY:
+                    Snow snow = (Snow) msg.obj;
+                    if(snowLinkedList.size()==0){
+                        if(snowList.size() < coordinateList.size()){
+                            if(snow!=null){
+                                snowList.add(snow);
+                                L.d(TAG,"onAnimationUpdate() SnowList.add() -> snow = "+snow.toString());
+                            }
+                        }else {
+                            if(snow!=null){
+                                snowLinkedList.addFirst(snow);
                             }
                         }
-                        boolean isParamsExist = false;
-                        for (ParamsData paramsData : cacheDataLinked){
-                            if(data.getSid().equals(paramsData.getSid())){
-                                isParamsExist =true;
-                                break;
-                            }
-                        }
-                        if (!isSnowExist && !isParamsExist){
-                            cacheDataLinked.addFirst(data);
-                            if(snowList.size() < coordinateList.size()){
-                                handler.sendEmptyMessage(MSG_ADD);
+                    }else {
+                        if(snowList.size() < coordinateList.size()){
+                            Snow snow1 = snowLinkedList.removeLast();
+                            snowList.add(snow1);
+                            L.d(TAG,"onAnimationUpdate() SnowList.add() -> snow = "+snow1.toString());
+                        }else {
+                            if(snow!=null){
+                                snowLinkedList.addFirst(snow);
                             }
                         }
                     }
-                    break;
-                case MSG_ADD_DELAY:
-                    Snow snow = (Snow) msg.obj;
-                    snowList.add(snow);
+                    if(snowList.size() >= coordinateList.size()){
+                        for (int i = 0; i < snowList.size(); i++) {
+                            Snow data = snowList.get(i);
+                            if("LOCAL1".equals(data.tplType)|| "LOCAL2".equals(data.tplType) ||
+                                    "LOCAL3".equals(data.tplType)) {
+                                data.timeCurrent = data.timeCurrent+snow.playDelay;
+                                snowList.set(i,data);
+                            }
+                        }
+                    }
                     break;
                 case MSG_ADD:
                     Log.d(TAG, "handleMessage() SnowList.add() cacheDataLinked.size = "+cacheDataLinked.size()+" ," +
                             " snowList.size() = "+snowList.size());
                     if(cacheDataLinked.size()==0 && snowList.size()<=2){
                         int timeTmp = 0;
-
                         if (snowList.size() == 0){
                             for (ParamsData data : showList){
                                 ProduceSnowTask task = new ProduceSnowTask(data,timeTmp);
@@ -320,12 +337,10 @@ public class BalloonView extends View {
                         }
 
                     }else if(cacheDataLinked.size() > 0){
-                        ParamsData paramsData = cacheDataLinked.removeLast();
-                        ProduceSnowTask task = new ProduceSnowTask(paramsData);
+                        ProduceSnowTask task = new ProduceSnowTask(true);
                         otherHandler.post(task);
-//                        Snow snow = getSnow(paramsData);
-//                        Log.d(TAG,"handleMessage()  SnowList.add() -> snow = "+snow.toString());
-//                        snowList.add(snow);
+                    }else {
+                        handler.sendEmptyMessage(MSG_ADD_DELAY);
                     }
                     break;
                 case MSG_STOP:
@@ -357,12 +372,50 @@ public class BalloonView extends View {
         return new ArrayList<>();
     }
 
+    private class PushDataTask implements Runnable{
+
+        private List<ParamsData> list;
+        public PushDataTask(List<ParamsData> list){
+            this.list = list;
+        }
+        @Override
+        public void run() {
+            Collections.sort(list);
+            for (ParamsData data : list){
+                boolean isSnowExist = false;
+                for (Snow snow : snowList){
+                    if(data.getSid().equals(snow.sid)){
+                        isSnowExist = true;
+                        break;
+                    }
+                }
+                boolean isParamsExist = false;
+                for (ParamsData paramsData : cacheDataLinked){
+                    if(data.getSid().equals(paramsData.getSid())){
+                        isParamsExist =true;
+                        break;
+                    }
+                }
+                if (!isSnowExist && !isParamsExist){
+                    cacheDataLinked.addFirst(data);
+                    if(snowList.size() < coordinateList.size()){
+                        handler.sendEmptyMessage(MSG_ADD);
+                    }
+                }
+            }
+            Log.d(TAG, "PushDataTask() snowList.size = "+snowList.size());
+            firstStartViewBool = false;
+
+        }
+    }
+
 
     private class ProduceSnowTask implements Runnable{
         private ParamsData data;
         private int timeDelay = 0;
-        public ProduceSnowTask(ParamsData paramsData){
-            this.data = paramsData;
+        private boolean trueDataBool = false;
+        public ProduceSnowTask(boolean trueDataBool){
+            this.trueDataBool= trueDataBool;
         }
 
         public ProduceSnowTask(ParamsData data, int timeDelay) {
@@ -372,6 +425,10 @@ public class BalloonView extends View {
 
         @Override
         public void run() {
+            if(trueDataBool){
+                if(cacheDataLinked.size()<=0) return;
+                data = cacheDataLinked.removeLast();
+            }
             Snow snow = getSnow(data);
             Message message = new Message();
             message.what = MSG_ADD_DELAY;
@@ -404,6 +461,7 @@ public class BalloonView extends View {
         snow2.content = data.getWords();
         snow2.name = data.getUname();
         snow2.tplType = data.getTpltype();
+        snow2.playDelay = data.getPlaytime() * 1000;
         Glide.with(App.getAppContext()).asBitmap().load(data.getUicon()).into(new SimpleTarget<Bitmap>() {
             @Override
             public void onResourceReady(@NonNull Bitmap resource, @Nullable Transition<? super Bitmap> transition) {
@@ -444,12 +502,41 @@ public class BalloonView extends View {
 
 
     private void updateSnowView(){
-        for (int i = 0; i< snowList.size();i++){
+        int[] indexArr = new int[coordinateList.size()];
+        for (int i = 0; i < coordinateList.size() && i < snowList.size() ;i++){
+            Snow snow = snowList.get(i);
+            indexArr[snow.index] += 1;
+        }
+        boolean firstUpdate = true;
+        for (int i = 0; i < coordinateList.size() && i < snowList.size() ;i++){
+            Snow snow = snowList.get(i);
+            int oldIndex = snow.index;
+            if(indexArr[oldIndex] > 1){
+                if(firstUpdate){
+                    firstUpdate = false;
+                    continue;
+                }
+                Log.d(TAG, "updateSnowView() 重复 =  "+snow.toString());
+                for (int j = 0; j < coordinateList.size() && j < snowList.size() ; j++) {
+                    if(indexArr[j] == 0){
+                        snow.endPoint = getEndPointF(j);
+                        snow.index = j;
+                        snowList.set(i,snow);
+                        Log.d(TAG, "updateSnowView() 重复  修改后 = "+snowList.get(i).toString());
+                        indexArr[j] += 1;
+                        break;
+                    }
+                }
+                indexArr[oldIndex] -= 1;
+            }
+        }
+
+        for (int i = 0; i < coordinateList.size() && i < snowList.size() ;i++){
             Snow snow = snowList.get(i);
             if(snow.pathPoint.y > 0 && snow.pathPoint.y < snow.endPoint.y){
                 if(snow.timeCurrent == 0){
                     snow.timeCurrent = System.currentTimeMillis();
-                    snow.timeEnd = snow.timeCurrent + delayTimeInt;
+                    snow.timeEnd = snow.timeCurrent + snow.playDelay;
                 }
                 if(snow.timeCurrent < snow.timeEnd){
                     snow.delayStatus = snow.DELAY_STATUS_STOP;
@@ -482,7 +569,7 @@ public class BalloonView extends View {
                     Log.d(TAG, "updateSnowView: snow.tplType = "+snow.tplType);
                     SaveTaskManager.getInstance().saveSnowTask(snow);
                 }
-                Log.d(TAG, "onAnimationUpdate() SnowList.remove() -> snow = "+snow.toString());
+                L.d(TAG, "onAnimationUpdate() SnowList.remove() -> snow = "+snow.toString());
                 snowList.remove(i);
                 if(snowList.size() < coordinateList.size()){
                     handler.sendEmptyMessage(MSG_ADD);
@@ -510,6 +597,8 @@ public class BalloonView extends View {
         float count = 0;
         private String name;
         private String content;
+        private int playDelay = 0;
+        private int index = 0;
         private final PointF startPoint = new PointF();
         private PointF pathPoint ;
         private PointF endPoint ;
@@ -534,6 +623,7 @@ public class BalloonView extends View {
             this.startPoint.y = randomY(bpHeight);
             this.pathPoint = this.startPoint;
             this.endPoint = getEndPointF();
+            this.index = currentIndex;
             this.controlPoint = getControlPointF(startPoint,endPoint);
             this.ySpeed = (ySpeed + ySpeed * (float) Math.random()) / BASESPEED;
             this.snowBitmap = Bitmap.createScaledBitmap(snowBitmap, bpWidth, bpHeight, true);
@@ -554,15 +644,25 @@ public class BalloonView extends View {
     }
 
 
-    private static int currentIndex = 0;
+    private static volatile int currentIndex = 0;
     private PointF getEndPointF(){
+        currentIndex++;
         if(currentIndex >= coordinateList.size()){
             currentIndex = 0;
         }
         PointF endPoint = new PointF();
         endPoint.x = coordinateList.get(currentIndex).x;
         endPoint.y = coordinateList.get(currentIndex).y + 30;
-        currentIndex++;
+        return endPoint;
+    }
+
+    private PointF getEndPointF(int index){
+       if(index > coordinateList.size()) {
+           index = 0;
+       }
+        PointF endPoint = new PointF();
+        endPoint.x = coordinateList.get(index).x;
+        endPoint.y = coordinateList.get(index).y + 30;
         return endPoint;
     }
 
@@ -591,8 +691,8 @@ public class BalloonView extends View {
 
     private float randomY(int bpHeight) {
         float nextFloat = yRandom.nextFloat() * bpHeight;
-        Log.d(TAG, "randomY() yHeight = "+(yHeight - nextFloat));
-        return yHeight - nextFloat;
+        Log.d(TAG, "randomY() yHeight = "+(yHeight + nextFloat));
+        return yHeight + nextFloat;
     }
 
 
@@ -617,7 +717,8 @@ public class BalloonView extends View {
 
     private final String JSON = "{\"coordinate\":[" +
             "{\"x\":210,\"y\":380},{\"x\":850,\"y\":430},{\"x\":1280,\"y\":440},{\"x\":1650,\"y\":450}," +
-            "{\"x\":950,\"y\":60},{\"x\":1180,\"y\":140},{\"x\":730,\"y\":130},{\"x\":410,\"y\":290}," +
+            "{\"x\":950,\"y\":60},{\"x\":1180,\"y\":140},{\"x\":730,\"y\":130}," +
+            "{\"x\":410,\"y\":290}," +
             "{\"x\":590,\"y\":400},{\"x\":1030,\"y\":370},{\"x\":1470,\"y\":330}]}";
 
 
