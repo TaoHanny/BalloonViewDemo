@@ -8,7 +8,6 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.widget.VideoView;
@@ -65,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
         mNetwork.addNetworkListener(mNetworkListener);
         flyView.setSnowDuration(200);
         handler.sendEmptyMessageDelayed(MSG_FLY_START,2000);
-//        handler.sendEmptyMessageDelayed(MSG_FLY_TEST,5000);
+//        handler.sendEmptyMessageDelayed(MSG_FLY_TEST,20000);
     }
 
     @Override
@@ -120,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final int MSG_PATH = 0x11;
     private final int MSG_FLY_START = 0x12;
-//    private final int MSG_FLY_TEST = 0x13;
+    private final int MSG_FLY_TEST = 0x13;
     private int currentIndex = 0;
     @SuppressLint("HandlerLeak")
     final Handler handler = new Handler(){
@@ -137,13 +136,13 @@ public class MainActivity extends AppCompatActivity {
                 case MSG_FLY_START:
                     flyView.startAnimation();
                     break;
-//                case MSG_FLY_TEST:
-//                    updateData();
-//                    if(currentIndex < 10){
-//                        currentIndex++;
-//                        handler.sendEmptyMessageDelayed(MSG_FLY_TEST,5000);
-//                    }
-//                    break;
+                case MSG_FLY_TEST:
+                    updateData();
+                    if(currentIndex < 12){
+                        currentIndex++;
+                        handler.sendEmptyMessageDelayed(MSG_FLY_TEST,5000);
+                    }
+                    break;
             }
         }
     };
@@ -189,18 +188,19 @@ public class MainActivity extends AppCompatActivity {
             List<ParamsData> dataList = gson.fromJson(jsonArray.toString(), new TypeToken<List<ParamsData>>(){}.getType());
             flyView.pushSnows(dataList);
         } catch (JSONException e) {
-            e.printStackTrace();
+            L.e(TAG,e.toString());
         }
     }
     private NetworkChangeHelper.NetworkListener mNetworkListener = new NetworkChangeHelper.NetworkListener() {
         @Override
         public void onNetworkChanged(boolean hasActiveNetwork, String type, String name) {
+            IS_REBOOT_OR_NETWOEK = true;
             if(hasActiveNetwork){
                 L.d(TAG, "onNetworkChanged: has active network");
                 manager.reportDataTask();
             }else {
                 L.d(TAG, "onNetworkChanged: hasnot active network");
-                IS_REBOOT_OR_NETWOEK = true;
+
             }
         }
     };
@@ -210,7 +210,7 @@ public class MainActivity extends AppCompatActivity {
 
     private int index = 0;
     private void updateData(){
-        for (int i = 0; i < 1; i++) {
+        for (int i = 0; i < 19; i++) {
             ParamsData paramsData = new ParamsData();
             long timeTmp = System.currentTimeMillis() / 1000 - 7300;
             paramsData.setSid(timeTmp+""+index);
@@ -218,7 +218,7 @@ public class MainActivity extends AppCompatActivity {
             paramsData.setWords("祝大家节日快乐");
             paramsData.setUname("test"+index);
             paramsData.setTpltype("C");
-            paramsData.setPlaytime(1000 * 15);
+            paramsData.setPlaytime(15);
 //            if(dataList.size() > 200) {
 //                dataList.clear();
 //            }

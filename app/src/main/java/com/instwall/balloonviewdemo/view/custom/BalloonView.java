@@ -286,31 +286,45 @@ public class BalloonView extends View {
                         if(snowList.size() < coordinateList.size()){
                             if(snow!=null){
                                 snowList.add(snow);
-                                L.d(TAG,"onAnimationUpdate() SnowList.add() -> snow = "+snow.toString());
+                                L.d(TAG,"onAnimationUpdate~~ SnowList.add() -> snow = "+snow.toString());
                             }
                         }else {
                             if(snow!=null){
                                 snowLinkedList.addFirst(snow);
+                                if(snowList.size() >= coordinateList.size()){
+                                    for (int i = 0; i < snowList.size(); i++) {
+                                        Snow data = snowList.get(i);
+                                        if(data!=null){
+                                            if("LOCAL1".equals(data.tplType)|| "LOCAL2".equals(data.tplType) ||
+                                                    "LOCAL3".equals(data.tplType)) {
+                                                data.timeCurrent = data.timeCurrent+snow.playDelay;
+                                                snowList.set(i,data);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }else {
                         if(snowList.size() < coordinateList.size()){
                             Snow snow1 = snowLinkedList.removeLast();
                             snowList.add(snow1);
-                            L.d(TAG,"onAnimationUpdate() SnowList.add() -> snow = "+snow1.toString());
+                            L.d(TAG,"onAnimationUpdate~~ SnowList.add() -> snow = "+snow1.toString());
                         }else {
                             if(snow!=null){
                                 snowLinkedList.addFirst(snow);
-                            }
-                        }
-                    }
-                    if(snowList.size() >= coordinateList.size()){
-                        for (int i = 0; i < snowList.size(); i++) {
-                            Snow data = snowList.get(i);
-                            if("LOCAL1".equals(data.tplType)|| "LOCAL2".equals(data.tplType) ||
-                                    "LOCAL3".equals(data.tplType)) {
-                                data.timeCurrent = data.timeCurrent+snow.playDelay;
-                                snowList.set(i,data);
+                                if(snowList.size() >= coordinateList.size()){
+                                    for (int i = 0; i < snowList.size(); i++) {
+                                        Snow data = snowList.get(i);
+                                        if(data!=null){
+                                            if("LOCAL1".equals(data.tplType)|| "LOCAL2".equals(data.tplType) ||
+                                                    "LOCAL3".equals(data.tplType)) {
+                                                data.timeCurrent = data.timeCurrent+snow.playDelay;
+                                                snowList.set(i,data);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -367,7 +381,7 @@ public class BalloonView extends View {
             List<ParamsData> dataList = gson.fromJson(jsonArray.toString(), new TypeToken<List<ParamsData>>(){}.getType());
             return dataList;
         } catch (JSONException e) {
-            e.printStackTrace();
+            L.e(TAG,e.toString());
         }
         return new ArrayList<>();
     }
@@ -569,7 +583,7 @@ public class BalloonView extends View {
                     Log.d(TAG, "updateSnowView: snow.tplType = "+snow.tplType);
                     SaveTaskManager.getInstance().saveSnowTask(snow);
                 }
-                L.d(TAG, "onAnimationUpdate() SnowList.remove() -> snow = "+snow.toString());
+                L.d(TAG, "onAnimationUpdate~~ SnowList.remove() -> snow = "+snow.toString());
                 snowList.remove(i);
                 if(snowList.size() < coordinateList.size()){
                     handler.sendEmptyMessage(MSG_ADD);
@@ -632,13 +646,11 @@ public class BalloonView extends View {
         @Override
         public String toString() {
             return "Snow{" +
-                    "sid='" + sid + '\'' +
-                    ", count=" + count +
-                    ", name='" + name + '\'' +
-                    ", content='" + content + '\'' +
-                    ", startPoint=" + startPoint +
-                    ", pathPoint=" + pathPoint +
-                    ", endPoint=" + endPoint +
+                    "sid='" + sid + '\t' +
+                    ", name='" + name + '\t' +
+                    ", content='" + content + '\t' +
+                    ", playDelay=" + playDelay +'\t'+
+                    ", index=" + index +
                     '}';
         }
     }
@@ -705,7 +717,7 @@ public class BalloonView extends View {
             dataList = gson.fromJson(jsonArr, new TypeToken<List<Coordinate>>(){}.getType());
             L.d(TAG, "getCoordinate() size = "+dataList.size());
         } catch (JSONException e) {
-            e.printStackTrace();
+            L.e(TAG,e.toString());
         }
         return dataList;
     }
